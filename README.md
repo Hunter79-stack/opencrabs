@@ -51,23 +51,15 @@
 
 ## 📸 Screenshots
 
-### Splash Screen
-![Splash Screen](src/screenshots/splash.png)
-*ASCII art splash with provider and model info*
+![Splash](src/screenshots/splash.png)
 
-### Chat Interface
-![Chat Interface](src/screenshots/opencrabs-ui.png)
-*Interactive chat with markdown rendering, syntax highlighting, and real-time streaming*
+![Onboarding](src/screenshots/onboard1.png)
 
-### Onboarding Wizard
-![Onboarding Step 1](src/screenshots/onboard1.png)
-*Step 1: Mode selection — QuickStart or Advanced*
+![Provider Auth](src/screenshots/onboard2.png)
 
-![Onboarding Step 2](src/screenshots/onboard2.png)
-*Step 2: Provider authentication with auto-detected setup token*
+![Workspace](src/screenshots/onboard3.png)
 
-![Onboarding Step 3](src/screenshots/onboard3.png)
-*Step 3: Workspace setup with template seeding*
+![Chat](src/screenshots/opencrabs-ui.png)
 
 ---
 
