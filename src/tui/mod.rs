@@ -17,11 +17,7 @@ pub mod highlight;
 pub mod markdown;
 pub mod splash;
 
-// Component modules (to be implemented)
 pub mod components;
-pub mod pages;
-pub mod styles;
-pub mod utils;
 
 // Re-exports
 pub use app::{App, DisplayMessage};

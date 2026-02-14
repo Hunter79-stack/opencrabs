@@ -6,7 +6,6 @@
 //! ## Features
 //!
 //! - **Multi-LLM Support:** Anthropic, OpenAI, Google Gemini, AWS Bedrock, Azure, VertexAI
-//! - **LSP Integration:** Semantic code understanding via Language Server Protocol
 //! - **Local-First:** SQLite storage for privacy and offline functionality
 //! - **Modern TUI:** Built with Ratatui for responsive terminal interface
 //! - **Tool System:** Extensible tools for file operations, shell commands, and more
@@ -41,17 +40,6 @@ pub mod utils;
 #[cfg(feature = "telegram")]
 pub mod telegram;
 pub mod voice;
-
-// Placeholder modules for future features
-// TODO: Implement these modules when ready
-#[allow(unused)]
-pub mod events;
-#[allow(unused)]
-pub mod lsp;
-#[allow(unused)]
-pub mod message;
-#[allow(unused)]
-pub mod sync;
 
 // Re-export commonly used types
 pub use error::{OpenCrabsError, ErrorCode};
