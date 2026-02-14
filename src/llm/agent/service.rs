@@ -49,8 +49,8 @@ pub struct AgentService {
     /// Maximum tool execution iterations
     max_tool_iterations: usize,
 
-    /// System prompt template
-    default_system_prompt: Option<String>,
+    /// System brain template
+    default_system_brain: Option<String>,
 
     /// Whether to auto-approve tool execution
     auto_approve_tools: bool,
@@ -70,16 +70,16 @@ impl AgentService {
             context,
             tool_registry: Arc::new(ToolRegistry::new()),
             max_tool_iterations: 10,
-            default_system_prompt: None,
+            default_system_brain: None,
             auto_approve_tools: false,
             approval_callback: None,
             working_directory: std::env::current_dir().unwrap_or_default(),
         }
     }
 
-    /// Set the default system prompt
-    pub fn with_system_prompt(mut self, prompt: String) -> Self {
-        self.default_system_prompt = Some(prompt);
+    /// Set the default system brain
+    pub fn with_system_brain(mut self, prompt: String) -> Self {
+        self.default_system_brain = Some(prompt);
         self
     }
 
@@ -271,9 +271,9 @@ impl AgentService {
         let mut context =
             AgentContext::from_db_messages(session_id, db_messages, context_window as usize);
 
-        // Add system prompt if available
-        if let Some(system_prompt) = &self.default_system_prompt {
-            context.system_prompt = Some(system_prompt.clone());
+        // Add system brain if available
+        if let Some(brain) = &self.default_system_brain {
+            context.system_brain = Some(brain.clone());
         }
 
         // Add user message
@@ -306,7 +306,7 @@ impl AgentService {
             let mut request =
                 LLMRequest::new(model_name.clone(), context.messages.clone()).with_max_tokens(4096);
 
-            if let Some(system) = &context.system_prompt {
+            if let Some(system) = &context.system_brain {
                 request = request.with_system(system.clone());
             }
 
@@ -774,9 +774,9 @@ impl AgentService {
         let mut context =
             AgentContext::from_db_messages(session_id, db_messages, context_window as usize);
 
-        // Add system prompt if available
-        if let Some(system_prompt) = &self.default_system_prompt {
-            context.system_prompt = Some(system_prompt.clone());
+        // Add system brain if available
+        if let Some(brain) = &self.default_system_brain {
+            context.system_brain = Some(brain.clone());
         }
 
         // Add user message
@@ -793,7 +793,7 @@ impl AgentService {
         let request =
             LLMRequest::new(model_name.clone(), context.messages.clone()).with_max_tokens(4096);
 
-        let request = if let Some(system) = context.system_prompt {
+        let request = if let Some(system) = context.system_brain {
             request.with_system(system)
         } else {
             request
@@ -959,11 +959,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_send_message_with_system_prompt() {
+    async fn test_send_message_with_system_brain() {
         let (agent_service, session_id) = create_test_service().await;
 
         let agent_service =
-            agent_service.with_system_prompt("You are a helpful assistant.".to_string());
+            agent_service.with_system_brain("You are a helpful assistant.".to_string());
 
         let response = agent_service
             .send_message(session_id, "Hello!".to_string(), None)

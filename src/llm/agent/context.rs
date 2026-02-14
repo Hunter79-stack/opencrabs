@@ -1,6 +1,6 @@
 //! Agent Context Management
 //!
-//! Manages conversation context including messages, system prompts,
+//! Manages conversation context including messages, system brain,
 //! and token tracking.
 
 use crate::db::models::Message as DbMessage;
@@ -14,8 +14,8 @@ pub struct AgentContext {
     /// Session ID
     pub session_id: Uuid,
 
-    /// System prompt
-    pub system_prompt: Option<String>,
+    /// System brain
+    pub system_brain: Option<String>,
 
     /// Conversation messages
     pub messages: Vec<Message>,
@@ -44,7 +44,7 @@ impl AgentContext {
     pub fn new(session_id: Uuid, max_tokens: usize) -> Self {
         Self {
             session_id,
-            system_prompt: None,
+            system_brain: None,
             messages: Vec::new(),
             tracked_files: Vec::new(),
             token_count: 0,
@@ -52,10 +52,10 @@ impl AgentContext {
         }
     }
 
-    /// Set the system prompt
-    pub fn with_system_prompt(mut self, prompt: String) -> Self {
+    /// Set the system brain
+    pub fn with_system_brain(mut self, prompt: String) -> Self {
         self.token_count += Self::estimate_tokens(&prompt);
-        self.system_prompt = Some(prompt);
+        self.system_brain = Some(prompt);
         self
     }
 
@@ -185,12 +185,12 @@ mod tests {
     }
 
     #[test]
-    fn test_system_prompt() {
+    fn test_system_brain() {
         let session_id = Uuid::new_v4();
         let context = AgentContext::new(session_id, 4096)
-            .with_system_prompt("You are a helpful assistant.".to_string());
+            .with_system_brain("You are a helpful assistant.".to_string());
 
-        assert!(context.system_prompt.is_some());
+        assert!(context.system_brain.is_some());
         assert!(context.token_count > 0);
     }
 

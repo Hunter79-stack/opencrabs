@@ -4,21 +4,9 @@
 *.pdb
 Cargo.lock
 
-# IDE
-.vscode/
-.idea/
+
 *.swp
 *.swo
-*~
-.DS_Store
-
-# Build artifacts
-*.exe
-*.dll
-*.so
-*.dylib
-*.a
-*.lib
 
 # Debug files
 *.dSYM/
@@ -41,12 +29,6 @@ opencrab.db-wal
 .env
 .env.local
 .env.*.local
-
-# Profiling
-flamegraph.svg
-*.prof
-perf.data
-perf.data.old
 
 # Testing
 /tests/fixtures/temp/
@@ -77,40 +59,8 @@ Desktop.ini
 /dist/
 /releases/
 
-# Benchmark results
-/benches/results/
-*.criterion
-
-# Cross-compilation
-/cross/
-
 # Claude Code / AI Development Files
 .claude/
-.claudemd
-.cursorrules
-.context/
-*.claude.md
-claude-session-*.json
-.aichat/
-.ai/
-ai-context/
-.anthropic/
-claude_desktop_config.json
-.mcp/
-
-# Development/Planning Documents (optional - uncomment to ignore)
-# SPRINT_*.md
-# GIT_COMMIT_SUMMARY.md
-# WINDOWS_BUILD_FIX.md
-# *_PLAN.md
-# *_PROGRESS.md
-# *_STATUS.md
-# *_COMPLETE.md
-
-# Development scripts
-create_stubs.sh
-*.temp.sh
-.opencrab_plan_*.json
 
 # Workspace personal files (use docs/reference/templates/ for generic versions)
 src/workspace/

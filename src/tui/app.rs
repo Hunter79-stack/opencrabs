@@ -5,10 +5,12 @@
 use super::events::{AppMode, EventHandler, ToolApprovalRequest, ToolApprovalResponse, TuiEvent};
 use super::plan::PlanDocument;
 use super::prompt_analyzer::PromptAnalyzer;
+use crate::brain::{BrainLoader, CommandLoader, SelfUpdater, UserCommand};
 use crate::db::models::{Message, Session};
 use crate::llm::agent::AgentService;
 use crate::services::{MessageService, PlanService, ServiceContext, SessionService};
 use anyhow::Result;
+use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -119,6 +121,13 @@ pub struct App {
     // Working directory
     pub working_directory: std::path::PathBuf,
 
+    // Brain state
+    pub brain_path: PathBuf,
+    pub user_commands: Vec<UserCommand>,
+
+    // Self-update state
+    pub rebuild_status: Option<String>,
+
     // Services
     agent_service: Arc<AgentService>,
     session_service: SessionService,
@@ -135,6 +144,10 @@ pub struct App {
 impl App {
     /// Create a new app instance
     pub fn new(agent_service: Arc<AgentService>, context: ServiceContext) -> Self {
+        let brain_path = BrainLoader::resolve_path();
+        let command_loader = CommandLoader::from_brain_path(&brain_path);
+        let user_commands = command_loader.load();
+
         Self {
             current_session: None,
             messages: Vec::new(),
@@ -166,6 +179,9 @@ impl App {
             model_selector_models: Vec::new(),
             model_selector_selected: 0,
             working_directory: std::env::current_dir().unwrap_or_default(),
+            brain_path,
+            user_commands,
+            rebuild_status: None,
             session_service: SessionService::new(context.clone()),
             message_service: MessageService::new(context.clone()),
             plan_service: PlanService::new(context),
@@ -397,6 +413,24 @@ impl App {
                     self.switch_mode(AppMode::Chat).await?;
                 }
             }
+            AppMode::RestartPending => {
+                if keys::is_cancel(&event) {
+                    self.rebuild_status = None;
+                    self.switch_mode(AppMode::Chat).await?;
+                } else if keys::is_enter(&event) {
+                    // Perform the restart
+                    if let Some(session) = &self.current_session {
+                        let session_id = session.id;
+                        if let Ok(updater) = SelfUpdater::auto_detect() {
+                            if let Err(e) = updater.restart(session_id) {
+                                self.show_error(format!("Restart failed: {}", e));
+                                self.switch_mode(AppMode::Chat).await?;
+                            }
+                            // If restart succeeds, this process is replaced — we never reach here
+                        }
+                    }
+                }
+            }
             AppMode::Help | AppMode::Settings => {
                 if keys::is_cancel(&event) {
                     self.switch_mode(AppMode::Chat).await?;
@@ -426,7 +460,10 @@ impl App {
             } else if keys::is_enter(&event) || keys::is_submit(&event) {
                 // Select the highlighted command and execute it
                 if let Some(&cmd_idx) = self.slash_filtered.get(self.slash_selected_index) {
-                    let cmd_name = SLASH_COMMANDS[cmd_idx].name.to_string();
+                    let cmd_name = self
+                        .slash_command_name(cmd_idx)
+                        .unwrap_or("")
+                        .to_string();
                     self.input_buffer.clear();
                     self.slash_suggestions_active = false;
                     self.handle_slash_command(&cmd_name);
@@ -735,17 +772,26 @@ impl App {
                 true
             }
             "/help" => {
-                self.push_system_message(
-                    "Available commands:\n\
-                     /model  — Show current model\n\
-                     /models — List available models\n\
-                     /usage  — Show token count and cost\n\
-                     /help   — Show this help"
-                        .to_string(),
-                );
+                self.mode = AppMode::Help;
                 true
             }
             _ if input.starts_with('/') => {
+                // Check user-defined commands
+                if let Some(user_cmd) = self.user_commands.iter().find(|c| c.name == cmd) {
+                    let prompt = user_cmd.prompt.clone();
+                    let action = user_cmd.action.clone();
+                    match action.as_str() {
+                        "system" => {
+                            self.push_system_message(prompt);
+                        }
+                        _ => {
+                            // "prompt" action — send to LLM
+                            let sender = self.event_sender();
+                            let _ = sender.send(TuiEvent::MessageSubmitted(prompt));
+                        }
+                    }
+                    return true;
+                }
                 self.push_system_message(format!(
                     "Unknown command: {}. Type /help for available commands.",
                     cmd
@@ -844,6 +890,9 @@ impl App {
     ) -> Result<()> {
         self.is_processing = false;
         self.streaming_response = None;
+
+        // Reload user commands (agent may have written new ones to commands.json)
+        self.reload_user_commands();
 
         // Check task completion FIRST (before moving response.content)
         let task_failed = if self.executing_plan {
@@ -1472,17 +1521,27 @@ impl App {
         Ok(())
     }
 
-    /// Update slash command autocomplete suggestions
+    /// Update slash command autocomplete suggestions (built-in + user-defined)
     fn update_slash_suggestions(&mut self) {
         let input = self.input_buffer.trim_start();
         if input.starts_with('/') && !input.contains(' ') && !input.is_empty() {
             let prefix = input.to_lowercase();
+
+            // Built-in commands: indices 0..SLASH_COMMANDS.len()
             self.slash_filtered = SLASH_COMMANDS
                 .iter()
                 .enumerate()
                 .filter(|(_, cmd)| cmd.name.starts_with(&prefix))
                 .map(|(i, _)| i)
                 .collect();
+
+            // User-defined commands: indices starting at SLASH_COMMANDS.len()
+            let base = SLASH_COMMANDS.len();
+            for (i, ucmd) in self.user_commands.iter().enumerate() {
+                if ucmd.name.to_lowercase().starts_with(&prefix) {
+                    self.slash_filtered.push(base + i);
+                }
+            }
 
             self.slash_suggestions_active = !self.slash_filtered.is_empty();
             // Clamp selected index
@@ -1494,6 +1553,35 @@ impl App {
             self.slash_filtered.clear();
             self.slash_selected_index = 0;
         }
+    }
+
+    /// Get the name of a slash command by its combined index
+    /// (built-in indices 0..N, user command indices N..)
+    pub fn slash_command_name(&self, index: usize) -> Option<&str> {
+        if index < SLASH_COMMANDS.len() {
+            Some(SLASH_COMMANDS[index].name)
+        } else {
+            self.user_commands
+                .get(index - SLASH_COMMANDS.len())
+                .map(|c| c.name.as_str())
+        }
+    }
+
+    /// Get the description of a slash command by its combined index
+    pub fn slash_command_description(&self, index: usize) -> Option<&str> {
+        if index < SLASH_COMMANDS.len() {
+            Some(SLASH_COMMANDS[index].description)
+        } else {
+            self.user_commands
+                .get(index - SLASH_COMMANDS.len())
+                .map(|c| c.description.as_str())
+        }
+    }
+
+    /// Reload user commands from brain workspace (called after agent responses)
+    fn reload_user_commands(&mut self) {
+        let command_loader = CommandLoader::from_brain_path(&self.brain_path);
+        self.user_commands = command_loader.load();
     }
 
     /// Open the model selector dialog

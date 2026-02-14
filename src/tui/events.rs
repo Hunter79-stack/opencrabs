@@ -133,6 +133,8 @@ pub enum AppMode {
     ModelSelector,
     /// Usage stats dialog (triggered by /usage)
     UsageDialog,
+    /// Restart confirmation pending (after successful /rebuild)
+    RestartPending,
 }
 
 /// Event handler for the TUI

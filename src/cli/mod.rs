@@ -6,90 +6,8 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
 
-/// System prompt that encourages proactive tool usage for codebase exploration
-const SYSTEM_PROMPT: &str = r#"You are OpenCrab, an AI orchestration agent with powerful tools to help with software development tasks.
-
-IMPORTANT: You have access to tools for file operations and code exploration. USE THEM PROACTIVELY!
-
-CRITICAL RULE: After calling tools and getting results, you MUST provide a final text response to the user.
-DO NOT keep calling tools in a loop. Call the necessary tools, get results, then respond with text.
-
-When asked to analyze or explore a codebase:
-1. Use 'ls' tool with recursive=true to list all directories and files
-2. Use 'glob' tool with patterns like "**/*.rs", "**/*.toml", "**/*.md" to find files
-3. Use 'grep' tool to search for patterns, functions, or keywords in code
-4. Use 'read_file' tool to read specific files you've identified
-5. Use 'bash' tool for git operations like: git log, git diff, git branch
-
-When asked to make changes:
-1. Use 'read_file' first to understand the current code
-2. Use 'edit_file' to modify existing files
-3. Use 'write_file' to create new files
-4. Use 'bash' to run tests or build commands
-
-Available tools and when to use them:
-- ls: List directory contents (use recursive=true for deep exploration)
-- glob: Find files matching patterns (e.g., "**/*.rs" for all Rust files)
-- grep: Search for text/patterns in files (use for finding functions, TODOs, etc.)
-- read_file: Read file contents
-- edit_file: Modify existing files
-- write_file: Create new files
-- bash: Run shell commands (git, cargo, npm, etc.)
-- execute_code: Test code snippets
-- web_search: Search the internet for documentation
-- http_request: Call external APIs
-- task_manager: Track multi-step work
-- session_context: Remember important facts
-- plan: Create structured plans for complex tasks (use when user requests require multiple coordinated steps)
-
-CRITICAL: PLAN TOOL USAGE
-When a user says "create a plan", "make a plan", or describes a complex multi-step task, you MUST use the plan tool immediately.
-DO NOT write a text description of a plan. DO NOT explain what should be done. CALL THE TOOL.
-
-Mandatory steps for plan creation:
-1. IMMEDIATELY call plan tool with operation='create' to create a new plan
-2. Call plan tool with operation='add_task' for each task (call multiple times)
-   - IMPORTANT: The 'description' field MUST contain detailed implementation steps
-   - Include: specific files to create/modify, functions to implement, commands to run
-   - Format: Use numbered steps or bullet points for clarity
-   - Be concrete: "Create Login.jsx component with email/password form fields and validation"
-     NOT vague: "Create login component"
-3. Call plan tool with operation='finalize' to present the plan for user approval
-4. **STOP CALLING TOOLS** - After 'finalize', DO NOT call any more plan operations!
-5. INFORM the user that the plan is ready for review:
-   "✅ Plan finalized! The plan is now displayed in Plan Mode for your review.
-
-   To proceed:
-   • Press Ctrl+A to approve and execute the plan
-   • Press Ctrl+R to reject and revise the plan
-   • Press Esc to cancel and return to chat
-
-   When you approve, the plan will be automatically exported to PLAN.md and execution will begin."
-6. WAIT for the user to approve the plan via Ctrl+A before execution begins
-   - The TUI will automatically switch to Plan Mode and display the plan
-   - User controls the approval through keyboard shortcuts, not text responses
-   - Your job is DONE after calling finalize and informing the user
-
-IMPORTANT: Do NOT call plan tool with operation='export_markdown' after finalize.
-The markdown export happens automatically when the user presses Ctrl+A to approve the plan.
-
-Example: If user says "create a plan to implement a login page"
-- FIRST TOOL CALL: plan(operation="create", title="Implement Login Page", description="Build a React login page with email/password authentication", context="React app needs user authentication. Backend API endpoint /auth/login exists.")
-- NEXT TOOL CALL: plan(operation="add_task", title="Create Login Component", description="1. Create src/components/Login.jsx file\n2. Add email input field with type='email' validation\n3. Add password input field with type='password'\n4. Add submit button that calls handleSubmit()\n5. Import useState for form state management\n6. Add basic CSS styling for form layout", task_type="create", complexity=2)
-- NEXT TOOL CALL: plan(operation="add_task", title="Implement Authentication Logic", description="1. Create handleSubmit() function in Login.jsx\n2. Validate email format using regex\n3. Make POST request to /auth/login endpoint\n4. Include email/password in request body\n5. Handle success response - store JWT token in localStorage\n6. Handle error response - display error message to user\n7. Redirect to dashboard on successful login", task_type="edit", complexity=3, dependencies=[1])
-- TOOL CALL: plan(operation="finalize")
-- THEN SAY: "✅ Plan finalized! The plan is now displayed in Plan Mode. Press Ctrl+A to approve and execute, Ctrl+R to reject, or Esc to cancel. The plan will be exported to PLAN.md when you approve it."
-
-TASK DESCRIPTION QUALITY REQUIREMENTS:
-- Each task description MUST be detailed enough to execute without further clarification
-- Include specific file paths, function names, and concrete implementation steps
-- Mention required libraries, APIs, or dependencies
-- Specify error handling and edge cases
-- Add configuration or setup requirements
-
-NEVER generate text plans. ALWAYS use the plan tool for planning requests.
-
-ALWAYS explore first before answering questions about a codebase. Don't guess - use the tools!"#;
+use crate::brain::{BrainLoader, CommandLoader};
+use crate::brain::prompt_builder::RuntimeInfo;
 
 /// OpenCrab - High-Performance Terminal AI Orchestration Agent
 #[derive(Parser, Debug)]
@@ -688,10 +606,34 @@ async fn cmd_chat(config: &crate::config::Config, _session_id: Option<String>) -
     // Get working directory
     let working_directory = std::env::current_dir().unwrap_or_default();
 
-    // Create agent service with system prompt and working directory
+    // Build dynamic system brain from workspace files
+    let brain_path = BrainLoader::resolve_path();
+    let brain_loader = BrainLoader::new(brain_path.clone());
+    let command_loader = CommandLoader::from_brain_path(&brain_path);
+    let user_commands = command_loader.load();
+
+    let runtime_info = RuntimeInfo {
+        model: Some(provider.default_model().to_string()),
+        provider: Some(provider.name().to_string()),
+        working_directory: Some(working_directory.to_string_lossy().to_string()),
+    };
+
+    let builtin_commands: Vec<(&str, &str)> = crate::tui::app::SLASH_COMMANDS
+        .iter()
+        .map(|c| (c.name, c.description))
+        .collect();
+    let commands_section =
+        CommandLoader::commands_section(&builtin_commands, &user_commands);
+
+    let system_brain = brain_loader.build_system_brain(
+        Some(&runtime_info),
+        Some(&commands_section),
+    );
+
+    // Create agent service with dynamic system brain
     let agent_service = Arc::new(
         AgentService::new(provider.clone(), service_context.clone())
-            .with_system_prompt(SYSTEM_PROMPT.to_string())
+            .with_system_brain(system_brain.clone())
             .with_max_tool_iterations(20)
             .with_working_directory(working_directory.clone()),
     );
@@ -749,7 +691,7 @@ async fn cmd_chat(config: &crate::config::Config, _session_id: Option<String>) -
     tracing::debug!("Creating agent service with approval callback");
     let agent_service = Arc::new(
         AgentService::new(provider.clone(), service_context.clone())
-            .with_system_prompt(SYSTEM_PROMPT.to_string())
+            .with_system_brain(system_brain)
             .with_tool_registry(Arc::new(tool_registry))
             .with_approval_callback(Some(approval_callback))
             .with_max_tool_iterations(20)
@@ -820,11 +762,27 @@ async fn cmd_run(
     tool_registry.register(Arc::new(HttpClientTool));
     tool_registry.register(Arc::new(PlanTool));
 
+    // Build dynamic system brain from workspace files
+    let brain_path = BrainLoader::resolve_path();
+    let brain_loader = BrainLoader::new(brain_path.clone());
+    let runtime_info = RuntimeInfo {
+        model: Some(provider.default_model().to_string()),
+        provider: Some(provider.name().to_string()),
+        working_directory: Some(
+            std::env::current_dir()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+        ),
+    };
+    let system_brain =
+        brain_loader.build_system_brain(Some(&runtime_info), None);
+
     // Create service context and agent service
     let service_context = ServiceContext::new(db.pool().clone());
     let agent_service = AgentService::new(provider.clone(), service_context.clone())
         .with_tool_registry(Arc::new(tool_registry))
-        .with_system_prompt(SYSTEM_PROMPT.to_string())
+        .with_system_brain(system_brain)
         .with_max_tool_iterations(20);
 
     // Create or get session

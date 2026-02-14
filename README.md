@@ -2,7 +2,7 @@
 
 **High-Performance Terminal AI Orchestration Agent for Software Development**
 
-> A terminal-native AI orchestration agent written in Rust with Ratatui. Inspired by [OpenClaw](https://github.com/anthropics/claude-code).
+> A terminal-native AI orchestration agent written in Rust with Ratatui. Inspired by [Claude Code](https://github.com/anthropics/claude-code).
 
 [![Rust Edition](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-FSL--1.1--MIT-blue.svg)](LICENSE.md)
@@ -71,6 +71,9 @@
 
 | Feature | Description |
 |---------|-------------|
+| **Dynamic Brain System** | System brain assembled from workspace MD files — personality, identity, memory, all editable live |
+| **Self-Sustaining** | Agent can modify its own source, build, test, and hot-restart via Unix `exec()` |
+| **Natural Language Commands** | Tell OpenCrab to create slash commands — it writes them to `commands.json` autonomously |
 | **Built-in Tools** | Read/write files, execute commands, grep, glob, web search, and more |
 | **Interactive Approval** | Permission dialogs for dangerous operations — full control over what AI can do |
 | **Syntax Highlighting** | 100+ languages with line numbers via syntect |
@@ -499,8 +502,12 @@ See [Plan Mode User Guide](src/docs/PLAN_MODE_USER_GUIDE.md) for full documentat
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+Enter` | Send message |
-| `Enter` | New line in input |
+| `Enter` | Send message |
+| `Alt+Enter` / `Shift+Enter` | New line in input |
+| `/help` | Open help dialog |
+| `/model` | Show current model |
+| `/models` | Switch model |
+| `/usage` | Token/cost stats |
 
 ### Plan Mode
 
@@ -545,12 +552,64 @@ opencrab logs clean -d 3  # Clean logs older than 3 days
 
 ---
 
+## 🧠 Brain System (v0.1.1)
+
+OpenCrab's brain is **dynamic and self-sustaining**. Instead of a hardcoded system prompt, the agent assembles its personality, knowledge, and behavior from workspace files that can be edited between turns.
+
+### Brain Workspace
+
+The brain reads markdown files from `~/opencrab/brain/workspace/` (or `OPENCRAB_BRAIN_PATH` env var):
+
+| File | Purpose |
+|------|---------|
+| `SOUL.md` | Personality, tone, hard behavioral rules |
+| `IDENTITY.md` | Agent name, vibe, style |
+| `USER.md` | Who the human is, how to work with them |
+| `AGENTS.md` | Workspace rules, memory system, safety policies |
+| `TOOLS.md` | Environment-specific notes (SSH hosts, API accounts) |
+| `MEMORY.md` | Long-term context, troubleshooting notes, lessons learned |
+
+Files are re-read **every turn** — edit them between messages and the agent immediately reflects the changes. Missing files are silently skipped; a hardcoded brain preamble is always present.
+
+### User-Defined Slash Commands
+
+Tell OpenCrab in natural language: *"Create a /deploy command that runs deploy.sh"* — and it writes the command to `~/opencrab/brain/commands.json`:
+
+```json
+[
+  {
+    "name": "/deploy",
+    "description": "Deploy to staging server",
+    "action": "prompt",
+    "prompt": "Run the deployment script at ./scripts/deploy.sh for the staging environment."
+  }
+]
+```
+
+Commands appear in autocomplete alongside built-in commands. After each agent response, `commands.json` is automatically reloaded — no restart needed.
+
+### Self-Sustaining Architecture
+
+OpenCrab can modify its own source code, build, test, and hot-restart itself:
+
+1. The agent edits source files using its tools
+2. Builds with `cargo build --release`
+3. Runs `cargo test` to verify
+4. Replaces itself via Unix `exec()` — preserving the session ID
+5. The new binary loads the same session from SQLite
+
+The running binary is in memory — source changes on disk don't affect it until restart. If the build fails, the agent stays running and can fix the errors.
+
+---
+
 ## 🏗️ Architecture
 
 ```
 Presentation Layer
     ↓
 CLI (Clap) + TUI (Ratatui + Crossterm)
+    ↓
+Brain Layer (Dynamic system brain, user commands, self-update)
     ↓
 Application Layer
     ↓
@@ -591,6 +650,11 @@ opencrab/
 │   ├── error.rs          # Error types
 │   ├── logging.rs        # Conditional logging system
 │   ├── app/              # Application lifecycle
+│   ├── brain/            # Dynamic brain system (v0.1.1)
+│   │   ├── mod.rs        # Module root
+│   │   ├── prompt_builder.rs  # BrainLoader — assembles system brain from workspace files
+│   │   ├── commands.rs   # CommandLoader — user-defined slash commands (JSON)
+│   │   └── self_update.rs # SelfUpdater — build, test, hot-restart via exec()
 │   ├── cli/              # Command-line interface (Clap)
 │   ├── config/           # Configuration (TOML + env + keyring)
 │   │   └── crabrace.rs   # Provider registry integration
@@ -745,7 +809,7 @@ See [LICENSE.md](LICENSE.md) for details.
 
 ## 🙏 Acknowledgments
 
-- **[OpenClaw](https://github.com/anthropics/claude-code)** — Inspiration
+- **[Claude Code](https://github.com/anthropics/claude-code)** — Inspiration
 - **[Crabrace](https://crates.io/crates/crabrace)** — Provider registry
 - **[Ratatui](https://ratatui.rs/)** — Terminal UI framework
 - **[Anthropic](https://anthropic.com/)** — Claude API

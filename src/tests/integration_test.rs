@@ -378,7 +378,7 @@ async fn test_end_to_end_token_usage() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_end_to_end_system_prompt() -> Result<()> {
+async fn test_end_to_end_system_brain() -> Result<()> {
     // Setup
     let db = create_test_db().await?;
     let provider = Arc::new(MockProvider::single_response(
@@ -387,11 +387,11 @@ async fn test_end_to_end_system_prompt() -> Result<()> {
     let service_context = ServiceContext::new(db.pool().clone());
 
     let agent_service = AgentService::new(provider, service_context.clone())
-        .with_system_prompt("You are a pirate assistant.".to_string());
+        .with_system_brain("You are a pirate assistant.".to_string());
 
     let session_service = SessionService::new(service_context);
     let session = session_service
-        .create_session(Some("System Prompt Test".to_string()))
+        .create_session(Some("System Brain Test".to_string()))
         .await?;
 
     // Send message

@@ -6,7 +6,6 @@ use super::app::App;
 use super::events::AppMode;
 use super::markdown::parse_markdown;
 use super::splash;
-use super::app::SLASH_COMMANDS;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -77,6 +76,11 @@ pub fn render(f: &mut Frame, app: &App) {
             render_chat(f, app, chunks[1]);
             render_input(f, app, chunks[2]);
             render_usage_dialog(f, app, f.area());
+        }
+        AppMode::RestartPending => {
+            render_chat(f, app, chunks[1]);
+            render_input(f, app, chunks[2]);
+            render_restart_dialog(f, app, f.area());
         }
     }
 
@@ -361,13 +365,14 @@ fn render_slash_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
         height,
     };
 
-    // Build dropdown lines
+    // Build dropdown lines (supports both built-in and user-defined commands)
     let lines: Vec<Line> = app
         .slash_filtered
         .iter()
         .enumerate()
         .map(|(i, &cmd_idx)| {
-            let cmd = &SLASH_COMMANDS[cmd_idx];
+            let name = app.slash_command_name(cmd_idx).unwrap_or("???");
+            let desc = app.slash_command_description(cmd_idx).unwrap_or("");
             let is_selected = i == app.slash_selected_index;
 
             let style = if is_selected {
@@ -388,8 +393,8 @@ fn render_slash_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
             };
 
             Line::from(vec![
-                Span::styled(format!(" {:<10}", cmd.name), style),
-                Span::styled(format!(" {}", cmd.description), desc_style),
+                Span::styled(format!(" {:<10}", name), style),
+                Span::styled(format!(" {}", desc), desc_style),
             ])
         })
         .collect();
@@ -1659,6 +1664,65 @@ fn render_usage_dialog(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(dialog, dialog_area);
 }
 
+/// Render restart confirmation dialog
+fn render_restart_dialog(f: &mut Frame, app: &App, area: Rect) {
+    let status = app
+        .rebuild_status
+        .as_deref()
+        .unwrap_or("Build successful");
+
+    let dialog_height = 8u16;
+    let dialog_width = 50u16.min(area.width.saturating_sub(4));
+
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(40),
+            Constraint::Length(dialog_height),
+            Constraint::Percentage(40),
+        ])
+        .split(area);
+
+    let horizontal = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Min((area.width.saturating_sub(dialog_width)) / 2),
+            Constraint::Length(dialog_width),
+            Constraint::Min(0),
+        ])
+        .split(vertical[1]);
+
+    let dialog_area = horizontal[1];
+    f.render_widget(Clear, dialog_area);
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("  {}", status),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from("  Restart with new binary?"),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  [Enter] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw("Restart  "),
+            Span::styled("[Esc] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::raw("Cancel"),
+        ]),
+    ];
+
+    let dialog = Paragraph::new(lines).block(
+        Block::default()
+            .title(" Rebuild Complete ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Green)),
+    );
+    f.render_widget(dialog, dialog_area);
+}
+
 /// Render the status bar
 fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let mode_text = match app.mode {
@@ -1672,6 +1736,7 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         AppMode::FilePicker => "FILE PICKER",
         AppMode::ModelSelector => "MODEL SELECTOR",
         AppMode::UsageDialog => "USAGE",
+        AppMode::RestartPending => "RESTART",
     };
 
     let status = if let Some(ref error) = app.error_message {

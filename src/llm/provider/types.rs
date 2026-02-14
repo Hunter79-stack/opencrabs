@@ -92,7 +92,7 @@ pub struct LLMRequest {
     pub model: String,
     /// Conversation messages
     pub messages: Vec<Message>,
-    /// System prompt (if supported)
+    /// System brain content (if supported)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
     /// Available tools
@@ -127,7 +127,7 @@ impl LLMRequest {
         }
     }
 
-    /// Set system prompt
+    /// Set system brain content
     pub fn with_system(mut self, system: impl Into<String>) -> Self {
         self.system = Some(system.into());
         self

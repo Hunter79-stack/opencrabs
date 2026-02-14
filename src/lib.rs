@@ -28,6 +28,7 @@
 //! ```
 
 pub mod app;
+pub mod brain;
 pub mod cli;
 pub mod config;
 pub mod db;
