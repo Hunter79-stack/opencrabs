@@ -55,7 +55,7 @@ opencrabs channels login
 opencrabs gateway --port 18789
 ```
 
-3. Put a minimal config in `~/.opencrabs/opencrabs.json`:
+3. Put a minimal config in `~/.opencrabs/config.toml`:
 
 ```json5
 {
@@ -71,7 +71,7 @@ When onboarding finishes, we auto-open the dashboard and print a clean (non-toke
 
 OpenCrabs reads operating instructions and “memory” from its workspace directory.
 
-By default, OpenCrabs uses `~/.opencrabs/workspace` as the agent workspace, and will create it (plus starter `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`) automatically on setup/first agent run. `BOOTSTRAP.md` is only created when the workspace is brand new (it should not come back after you delete it). `MEMORY.md` is optional (not auto-created); when present, it is loaded for normal sessions. Subagent sessions only inject `AGENTS.md` and `TOOLS.md`.
+By default, OpenCrabs uses `~/.opencrabs/` as the agent workspace, and will create it (plus starter `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`) automatically on setup/first agent run. `BOOTSTRAP.md` is only created when the workspace is brand new (it should not come back after you delete it). `MEMORY.md` is optional (not auto-created); when present, it is loaded for normal sessions. Subagent sessions only inject `AGENTS.md` and `TOOLS.md`.
 
 Tip: treat this folder like OpenCrabs’s “memory” and make it a git repo (ideally private) so your `AGENTS.md` + memory files are backed up. If git is installed, brand-new workspaces are auto-initialized.
 
@@ -87,7 +87,7 @@ Optional: choose a different workspace with `agents.defaults.workspace` (support
 ```json5
 {
   agent: {
-    workspace: "~/.opencrabs/workspace",
+    workspace: "~/.opencrabs/",
   },
 }
 ```
@@ -117,7 +117,7 @@ Example:
   logging: { level: "info" },
   agent: {
     model: "anthropic/claude-opus-4-6",
-    workspace: "~/.opencrabs/workspace",
+    workspace: "~/.opencrabs/",
     thinkingDefault: "high",
     timeoutSeconds: 1800,
     // Start with 0; enable later.

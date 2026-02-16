@@ -651,16 +651,26 @@ OpenCrabs's brain is **dynamic and self-sustaining**. Instead of a hardcoded sys
 
 The brain reads markdown files from `~/.opencrabs/` (or `OPENCRABS_BRAIN_PATH` env var):
 
-| File | Purpose |
-|------|---------|
-| `SOUL.md` | Personality, tone, hard behavioral rules |
-| `IDENTITY.md` | Agent name, vibe, style |
-| `USER.md` | Who the human is, how to work with them |
-| `AGENTS.md` | Workspace rules, memory system, safety policies |
-| `TOOLS.md` | Environment-specific notes (SSH hosts, API accounts) |
-| `MEMORY.md` | Long-term context, troubleshooting notes, lessons learned (user-curated, never touched by auto-compaction) |
+```
+~/.opencrabs/                  # Home — everything lives here
+├── SOUL.md                    # Personality, tone, hard behavioral rules
+├── IDENTITY.md                # Agent name, vibe, style, workspace path
+├── USER.md                    # Who the human is, how to work with them
+├── AGENTS.md                  # Workspace rules, memory system, safety policies
+├── TOOLS.md                   # Environment-specific notes (SSH hosts, API accounts)
+├── MEMORY.md                  # Long-term curated context (never touched by auto-compaction)
+├── SECURITY.md                # Security policies and access controls
+├── BOOT.md                    # Startup checklist (optional, runs on launch)
+├── HEARTBEAT.md               # Periodic task definitions (optional)
+├── BOOTSTRAP.md               # First-run onboarding wizard (deleted after setup)
+├── config.toml                # App configuration (provider, model, approval policy)
+├── commands.toml              # User-defined slash commands
+├── opencrabs.db               # SQLite — sessions, messages, plans
+└── memory/                    # Daily memory logs (auto-compaction summaries)
+    └── YYYY-MM-DD.md          # One per day, multiple compactions stack
+```
 
-Files are re-read **every turn** — edit them between messages and the agent immediately reflects the changes. Missing files are silently skipped; a hardcoded brain preamble is always present.
+Brain files are re-read **every turn** — edit them between messages and the agent immediately reflects the changes. Missing files are silently skipped; a hardcoded brain preamble is always present.
 
 ### 3-Tier Memory Architecture
 

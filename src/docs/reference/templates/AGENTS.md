@@ -1,6 +1,6 @@
 # AGENTS.md - Your Workspace
 
-This folder is home. Treat it that way.
+This folder (`~/.opencrabs/`) is home. Treat it that way.
 
 ## First Run
 
@@ -19,8 +19,8 @@ Don't ask permission. Just do it.
 
 You wake up fresh each session. These files are your continuity:
 
-- **Daily notes:** `memory/YYYY-MM-DD.md` (create `memory/` if needed) -- raw logs of what happened
-- **Long-term:** `MEMORY.md` -- your curated memories
+- **Daily notes:** `~/.opencrabs/memory/YYYY-MM-DD.md` (create `memory/` if needed) -- raw logs of what happened
+- **Long-term:** `~/.opencrabs/MEMORY.md` -- your curated memories
 
 Capture what matters. Decisions, context, things to remember. Skip the secrets unless asked to keep them.
 
@@ -29,8 +29,8 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 When context gets compacted mid-conversation, you lose everything. **After any compaction:**
 
 1. **IMMEDIATELY read memory files** -- don't assume you know what happened
-2. Read `MEMORY.md` for long-term context
-3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent activity
+2. Read `~/.opencrabs/MEMORY.md` for long-term context
+3. Read `~/.opencrabs/memory/YYYY-MM-DD.md` (today + yesterday) for recent activity
 
 **Golden Rule:** If you want to remember it after compaction, **write it to a file**. Mental notes don't survive compaction.
 
