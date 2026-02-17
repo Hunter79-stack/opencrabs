@@ -110,7 +110,7 @@ pub struct ChannelsConfig {
 
 /// When the bot should respond to messages in group channels.
 /// DMs always get a response regardless of this setting.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RespondTo {
     /// Respond to all messages from allowed users
@@ -118,13 +118,8 @@ pub enum RespondTo {
     /// Only respond to direct messages, ignore group channels entirely
     DmOnly,
     /// Only respond when @mentioned (or replied-to on Telegram)
+    #[default]
     Mention,
-}
-
-impl Default for RespondTo {
-    fn default() -> Self {
-        Self::Mention
-    }
 }
 
 /// Individual channel configuration

@@ -5,6 +5,23 @@ All notable changes to OpenCrab will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.15] - 2026-02-17
+
+### Changed
+- **Built-in FTS5 Memory Search** -- Replaced external QMD CLI dependency with native SQLite FTS5 full-text search. Zero new dependencies (uses existing `sqlx`), always-on memory search with no separate binary to install. BM25-ranked results with porter stemming and snippet extraction
+- **Memory Search Always Available** -- Sidebar now shows "Memory search" with a permanent green dot instead of conditional "QMD search" that required an external binary
+- **Targeted Index After Compaction** -- After context compaction, only the updated daily memory file is indexed (via `index_file`) instead of triggering a full `qmd update` subprocess
+- **Startup Background Reindex** -- On launch, existing memory files are indexed in the background so `memory_search` is immediately useful for returning users
+
+### Added
+- **FTS5 Memory Module** -- New async API: `get_pool()` (lazy singleton), `search()` (BM25 MATCH), `index_file()` (single file, hash-skip), `reindex()` (full walk + prune deleted). Schema: `memory_docs` content table + `memory_fts` FTS5 virtual table with sync triggers
+- **Memory Search Tests** -- Unit tests for FTS5 init, index, search, hash-based skip, and content update re-indexing
+- **Performance Benchmarks in README** -- Real release-build numbers: ~0.4ms/query, ~0.3ms/file index, 15ms full reindex of 50 files
+- **Resource Footprint Table in README** -- Branded stats table with binary size, RAM, storage, and FTS5 search latency
+
+### Removed
+- **QMD CLI Dependency** -- Removed all `Command::new("qmd")` subprocess calls: `is_qmd_available()`, `ensure_collection()`, `search()` (sync), `reindex_background()`
+
 ## [0.2.14] - 2026-02-17
 
 ### Added

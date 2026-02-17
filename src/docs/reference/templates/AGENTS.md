@@ -20,7 +20,7 @@ Don't ask permission. Just do it.
 
 You wake up fresh each session. These files are your continuity:
 
-### ⚡ QMD Search — MANDATORY FIRST PASS
+### ⚡ Memory Search — MANDATORY FIRST PASS
 **Before reading ANY memory file**, use `memory_search` first:
 - ~500 tokens for search vs ~15,000 tokens for full file read
 - Only use `memory_get` or `Read` if search doesn't provide enough context

@@ -1,14 +1,14 @@
 //! Memory Search Tool
 //!
-//! Searches past conversation compaction logs using QMD.
-//! If QMD is not installed, returns a helpful hint instead of failing.
+//! Searches past conversation compaction logs using built-in FTS5 full-text search.
+//! Always available — no external dependencies required.
 
 use super::error::Result;
 use super::r#trait::{Tool, ToolCapability, ToolExecutionContext, ToolResult};
 use async_trait::async_trait;
 use serde_json::Value;
 
-/// Memory search tool backed by QMD.
+/// Memory search tool backed by built-in FTS5.
 pub struct MemorySearchTool;
 
 #[async_trait]
@@ -65,34 +65,36 @@ impl Tool for MemorySearchTool {
             .and_then(|v| v.as_u64())
             .unwrap_or(5) as usize;
 
-        // Check if QMD is available
-        if !crate::memory::is_qmd_available() {
-            return Ok(ToolResult::success(
-                "QMD is not installed. Memory search requires QMD (https://github.com/qmd-project/qmd). \
-                 Install it to enable searching past conversation logs. \
-                 Daily memory logs are still saved to ~/.opencrabs/memory/ as markdown files \
-                 that you can read directly with the read_file tool."
-                    .to_string(),
-            ));
-        }
-
-        // Ensure collection exists
-        if let Err(e) = crate::memory::ensure_collection() {
-            tracing::warn!("Failed to ensure QMD collection: {}", e);
-        }
-
-        // Search
-        match crate::memory::search(&query, n) {
-            Ok(results) => {
-                if results.trim().is_empty() {
-                    Ok(ToolResult::success(
-                        "No matching memories found.".to_string(),
-                    ))
-                } else {
-                    Ok(ToolResult::success(results))
-                }
+        // Get memory database pool
+        let pool = match crate::memory::get_pool().await {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Memory DB init failed: {}", e);
+                return Ok(ToolResult::error(format!(
+                    "Memory search unavailable: {e}. \
+                     Daily memory logs are still saved to ~/.opencrabs/memory/ as markdown files \
+                     that you can read directly with the read_file tool."
+                )));
             }
-            Err(e) => Ok(ToolResult::error(format!("Memory search failed: {}", e))),
+        };
+
+        match crate::memory::search(pool, &query, n).await {
+            Ok(results) if results.is_empty() => {
+                Ok(ToolResult::success("No matching memories found.".to_string()))
+            }
+            Ok(results) => {
+                let mut output = String::new();
+                for (i, r) in results.iter().enumerate() {
+                    output.push_str(&format!(
+                        "{}. **{}**\n   {}\n\n",
+                        i + 1,
+                        r.path,
+                        r.snippet
+                    ));
+                }
+                Ok(ToolResult::success(output))
+            }
+            Err(e) => Ok(ToolResult::error(format!("Memory search failed: {e}"))),
         }
     }
 }

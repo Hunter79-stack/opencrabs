@@ -22,6 +22,24 @@
 
 **Author:** [Adolfo Usier](https://github.com/adolfousier)
 
+| | 🦀 OpenCrabs |
+|---|---|
+| Binary | 34 MB |
+| RAM (RSS) | 57 MB |
+| Virtual Memory | 996 MB |
+| Workspace | 1.4 MB |
+| Memory Dir | 8 KB |
+| Memory DB (FTS5) | ~20-50 KB |
+| Sessions | 220 KB (4 sessions) |
+| Language | Rust |
+| Session Storage | JSONL + FTS5 full-text search |
+| Search Latency | ~0.4ms/query |
+| Index Speed | ~0.3ms/file |
+| Reindex (50 files) | 15ms |
+| New Dependencies | 0 (uses existing sqlx) |
+
+> *Benchmarks measured locally on release build with 50 memory files (in-memory SQLite). Real-world on-disk performance may vary by hardware.*
+
 ---
 
 ## Table of Contents
@@ -74,7 +92,7 @@
 | **Local LLM Support** | Run with LM Studio, Ollama, or any OpenAI-compatible endpoint — 100% private, zero-cost |
 | **Cost Tracking** | Per-message token count and cost displayed in header |
 | **Context Awareness** | Live context usage indicator showing actual token counts (e.g. `ctx: 45K/200K (23%)`); auto-compaction at 70% with tool overhead budgeting; accurate tiktoken-based counting calibrated against API actuals |
-| **3-Tier Memory** | (1) **Brain MEMORY.md** — user-curated durable memory loaded every turn, (2) **Daily Logs** — auto-compaction summaries at `~/.opencrabs/memory/YYYY-MM-DD.md`, (3) **Memory Search** — `memory_search` tool for semantic retrieval across all past logs via QMD |
+| **3-Tier Memory** | (1) **Brain MEMORY.md** — user-curated durable memory loaded every turn, (2) **Daily Logs** — auto-compaction summaries at `~/.opencrabs/memory/YYYY-MM-DD.md`, (3) **Memory Search** — built-in FTS5 full-text search across all past logs (zero external deps, always-on) |
 | **Dynamic Brain System** | System brain assembled from workspace MD files (SOUL, IDENTITY, USER, AGENTS, TOOLS, MEMORY) — all editable live between turns |
 
 ### Multimodal Input
@@ -464,7 +482,7 @@ OpenCrabs includes a built-in tool execution system. The AI can use these tools 
 | `parse_document` | Extract text from PDF, DOCX, HTML |
 | `task_manager` | Manage agent tasks |
 | `http_request` | Make HTTP requests |
-| `memory_search` | Search past conversation memory logs for context from previous sessions (QMD-backed, graceful skip if not installed) |
+| `memory_search` | Search past conversation memory logs for context from previous sessions (built-in FTS5, always available) |
 | `config_manager` | Read/write config.toml and commands.toml at runtime (change settings, add/remove commands, reload config) |
 | `session_context` | Access session information |
 | `plan` | Create structured execution plans |
@@ -679,16 +697,65 @@ Brain files are re-read **every turn** — edit them between messages and the ag
 |------|----------|---------|------------|
 | **1. Brain MEMORY.md** | `~/.opencrabs/MEMORY.md` | Durable, curated knowledge loaded into system brain every turn | You (the user) |
 | **2. Daily Memory Logs** | `~/.opencrabs/memory/YYYY-MM-DD.md` | Auto-compaction summaries with structured breakdowns of each session | Auto (on compaction) |
-| **3. Memory Search** | `memory_search` tool via QMD | Semantic search across all daily logs — the agent can recall past decisions, files, errors | Agent (via tool call) |
+| **3. Memory Search** | `memory_search` tool (built-in FTS5) | BM25-ranked full-text search across all daily logs — the agent can recall past decisions, files, errors | Agent (via tool call) |
 
 **How it works:**
 1. When context hits 70%, auto-compaction summarizes the conversation into a structured breakdown (current task, decisions, files modified, errors, next steps)
 2. The summary is saved to a daily log at `~/.opencrabs/memory/2026-02-15.md` (multiple compactions per day stack in the same file)
 3. The summary is shown to you in chat so you see exactly what was remembered
-4. If [QMD](https://github.com/qmd-project/qmd) is installed, the index is updated in the background so the agent can search past logs with `memory_search`
+4. The file is indexed in the background into the FTS5 database so the agent can search past logs with `memory_search`
 5. Brain `MEMORY.md` is **never touched** by auto-compaction — it stays as your curated, always-loaded context
 
-**Without QMD:** Daily logs are still saved as plain markdown. The agent can read them directly with `read_file`. Memory search returns a helpful hint to install QMD.
+#### Built-in FTS5 Memory Search
+
+Memory search uses SQLite's FTS5 extension — built into the existing `sqlx` dependency with **zero additional crates or external tools**. No separate binary to install, no subprocess calls, always available out of the box.
+
+```
+┌─────────────────────────────────────┐
+│  ~/.opencrabs/memory/               │
+│  ├── 2026-02-15.md                  │  Markdown files (daily logs)
+│  ├── 2026-02-16.md                  │
+│  └── 2026-02-17.md                  │
+└──────────────┬──────────────────────┘
+               │ index on startup +
+               │ after each compaction
+               ▼
+┌─────────────────────────────────────┐
+│  memory.db  (SQLite WAL mode)       │
+│  ┌───────────────────────────────┐  │
+│  │ memory_docs (content table)   │  │  path, body, hash, modified_at
+│  └───────────────┬───────────────┘  │
+│                  │ sync triggers    │
+│  ┌───────────────▼───────────────┐  │
+│  │ memory_fts (FTS5 virtual)     │  │  porter + unicode61 tokenizer
+│  └───────────────────────────────┘  │
+└──────────────┬──────────────────────┘
+               │ MATCH query
+               ▼
+┌─────────────────────────────────────┐
+│  BM25-ranked results with snippets  │
+└─────────────────────────────────────┘
+```
+
+**vs. previous QMD approach:**
+
+| | QMD (before) | Built-in FTS5 (now) |
+|---|---|---|
+| **Dependencies** | External `qmd` binary required | Zero — uses existing `sqlx` SQLite |
+| **Availability** | Only if user installs QMD | Always on, every install |
+| **Search method** | Subprocess call (`Command::new("qmd")`) | In-process async SQL query |
+| **Ranking** | QMD's internal scoring | FTS5 BM25 with porter stemming |
+| **Index updates** | Background `qmd update` subprocess | Direct `INSERT ON CONFLICT` (~0.3ms/file) |
+| **Failure mode** | Silent degradation if not installed | Always works |
+
+**Benchmarks** (release build, 50 memory files, in-memory SQLite):
+
+| Operation | Time |
+|---|---|
+| Index 50 files (first run) | 15ms |
+| Re-index 50 files (no changes, hash skip) | 3ms |
+| Per-file index | ~0.3ms |
+| Search query (avg over 500 queries) | ~0.4ms |
 
 ### User-Defined Slash Commands
 
@@ -804,7 +871,7 @@ opencrabs/
 │   │   └── crabrace.rs   # Provider registry integration
 │   ├── db/               # Database layer (SQLx + SQLite)
 │   ├── services/         # Business logic (Session, Message, File, Plan)
-│   ├── memory/           # Memory search code (QMD wrapper); data stored at ~/.opencrabs/memory/
+│   ├── memory/           # Memory search (built-in FTS5); data stored at ~/.opencrabs/memory/
 │   ├── llm/              # LLM integration
 │   │   ├── agent/        # Agent service + context management
 │   │   ├── provider/     # Provider implementations (Anthropic, OpenAI, Qwen)

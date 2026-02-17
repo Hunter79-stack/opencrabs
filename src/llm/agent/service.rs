@@ -1346,8 +1346,15 @@ impl AgentService {
             tracing::warn!("Failed to save compaction summary to daily log: {}", e);
         }
 
-        // Trigger background re-index so memory_search picks up the new log
-        crate::memory::reindex_background();
+        // Index the updated memory file in the background so memory_search picks it up
+        let memory_path = crate::config::opencrabs_home()
+            .join("memory")
+            .join(format!("{}.md", chrono::Local::now().format("%Y-%m-%d")));
+        tokio::spawn(async move {
+            if let Ok(pool) = crate::memory::get_pool().await {
+                let _ = crate::memory::index_file(pool, &memory_path).await;
+            }
+        });
 
         // Compact the context: keep last 4 message pairs (8 messages)
         context.compact_with_summary(summary.clone(), 8);

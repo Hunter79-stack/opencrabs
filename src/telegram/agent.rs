@@ -28,6 +28,7 @@ pub struct TelegramAgent {
 }
 
 impl TelegramAgent {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         agent_service: Arc<AgentService>,
         service_context: ServiceContext,

@@ -15,8 +15,6 @@ use uuid::Uuid;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
 
-/// Header prepended to all outgoing messages so the user knows it's from the agent.
-
 /// Split a message into chunks that fit Discord's 2000 char limit.
 pub fn split_message(text: &str, max_len: usize) -> Vec<&str> {
     if text.len() <= max_len {
@@ -96,11 +94,11 @@ pub(crate) async fn handle_message(
     let mut content = msg.content.clone();
 
     // Strip bot @mention from content when responding to a mention
-    if !is_dm && *respond_to == RespondTo::Mention {
-        if let Some(bot_id) = discord_state.bot_user_id().await {
-            let mention_tag = format!("<@{}>", bot_id);
-            content = content.replace(&mention_tag, "").trim().to_string();
-        }
+    if !is_dm && *respond_to == RespondTo::Mention
+        && let Some(bot_id) = discord_state.bot_user_id().await
+    {
+        let mention_tag = format!("<@{}>", bot_id);
+        content = content.replace(&mention_tag, "").trim().to_string();
     }
     if content.is_empty() && msg.attachments.is_empty() {
         return;

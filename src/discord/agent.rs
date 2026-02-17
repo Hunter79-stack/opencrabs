@@ -30,6 +30,7 @@ pub struct DiscordAgent {
 }
 
 impl DiscordAgent {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         agent_service: Arc<AgentService>,
         service_context: ServiceContext,

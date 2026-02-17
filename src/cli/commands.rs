@@ -268,7 +268,7 @@ pub(crate) async fn cmd_run(
     tool_registry.register(Arc::new(ContextTool));
     tool_registry.register(Arc::new(HttpClientTool));
     tool_registry.register(Arc::new(PlanTool));
-    // Memory search (QMD-backed, graceful skip if not installed)
+    // Memory search (built-in FTS5, always available)
     tool_registry.register(Arc::new(MemorySearchTool));
     // Config management (read/write config.toml, commands.toml)
     tool_registry.register(Arc::new(ConfigTool));

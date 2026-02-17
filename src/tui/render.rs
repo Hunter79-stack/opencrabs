@@ -1652,8 +1652,8 @@ fn render_settings(f: &mut Frame, app: &App, area: Rect) {
         "ask"
     };
 
-    // QMD availability
-    let qmd_available = crate::memory::is_qmd_available();
+    // Memory search is always available (built-in FTS5)
+    let memory_available = true;
 
     // User commands count
     let cmd_count = app.user_commands.len();
@@ -1684,7 +1684,7 @@ fn render_settings(f: &mut Frame, app: &App, area: Rect) {
         kv("User commands", &cmd_summary),
         Line::from(""),
         section("MEMORY"),
-        status_dot("QMD search", qmd_available),
+        status_dot("Memory search", memory_available),
         Line::from(""),
         section("PATHS"),
         kv("Config", &config_path),

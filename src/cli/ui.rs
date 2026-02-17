@@ -86,7 +86,7 @@ pub(crate) async fn cmd_chat(
     tool_registry.register(Arc::new(ContextTool));
     tool_registry.register(Arc::new(HttpClientTool));
     tool_registry.register(Arc::new(PlanTool));
-    // Memory search (QMD-backed, graceful skip if not installed)
+    // Memory search (built-in FTS5, always available)
     tool_registry.register(Arc::new(MemorySearchTool));
     // Config management (read/write config.toml, commands.toml)
     tool_registry.register(Arc::new(ConfigTool));
@@ -100,6 +100,19 @@ pub(crate) async fn cmd_chat(
         tool_registry.register(Arc::new(BraveSearchTool::new(brave_key)));
         tracing::info!("Registered Brave search tool");
     }
+
+    // Index existing memory files in the background (non-blocking)
+    tokio::spawn(async {
+        match crate::memory::get_pool().await {
+            Ok(pool) => {
+                match crate::memory::reindex(pool).await {
+                    Ok(n) => tracing::info!("Startup memory reindex: {n} files"),
+                    Err(e) => tracing::warn!("Startup memory reindex failed: {e}"),
+                }
+            }
+            Err(e) => tracing::warn!("Memory DB init failed at startup: {e}"),
+        }
+    });
 
     // Create service context
     let service_context = ServiceContext::new(db.pool().clone());

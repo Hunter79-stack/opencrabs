@@ -1,6 +1,6 @@
 # MEMORY.md — Long-Term Memory
 
-## ⚡ QMD Search — USE FIRST! (Token Savings)
+## ⚡ Memory Search — USE FIRST! (Token Savings)
 - **Always use `memory_search` as FIRST PASS** before reading full files
 - ~500 tokens for search vs ~15,000 tokens for reading full files
 - Only use `memory_get` or `Read` if search doesn't provide enough context
@@ -37,6 +37,7 @@
 - **Don't give up too early** — dig deeper before declaring something unfixable
 - **Path resolution:** Always verify `$HOME` before file operations
 - **State files:** Many silent failures are caused by stale cached state — clear and restart
+- **Rust-first policy:** When searching for new integrations, tools, or adding new features, always prioritize Rust-based crates over wrappers or other languages. Performance matters — native Rust keeps the stack lean and fast.
 
 ## Personality Notes
 *(What you've learned about working with your human)*

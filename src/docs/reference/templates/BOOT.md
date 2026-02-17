@@ -48,3 +48,7 @@ On every fresh start, do this:
 - **Daily file format:** `memory/YYYY-MM-DD.md` with timestamps and short entries
 - **MEMORY.md:** Only distilled, long-term valuable info — not raw logs
 - **If unsure whether to save it: save it.** Disk is cheap, lost context isn't.
+
+## Rust-First Policy
+
+When searching for new integrations, libraries, or adding new features, **always prioritize Rust-based crates** over wrappers, FFI bindings, or other-language alternatives. Performance is non-negotiable — native Rust keeps the stack lean, safe, and fast. Only fall back to non-Rust solutions when no viable crate exists.
