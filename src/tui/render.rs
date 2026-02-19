@@ -287,6 +287,18 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
             continue;
         }
 
+        // Render history paging marker
+        if app.messages[msg_idx].role == "history_marker" {
+            lines.push(Line::from(Span::styled(
+                app.messages[msg_idx].content.clone(),
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::ITALIC),
+            )));
+            lines.push(Line::from(""));
+            continue;
+        }
+
         // Render tool call groups (finalized)
         if let Some(ref group) = app.messages[msg_idx].tool_group {
             render_tool_group(&mut lines, group, false);

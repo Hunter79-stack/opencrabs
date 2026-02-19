@@ -22,7 +22,8 @@ pub(crate) async fn cmd_chat(
                 edit::EditTool, exa_search::ExaSearchTool, glob::GlobTool, grep::GrepTool,
                 http::HttpClientTool, ls::LsTool, memory_search::MemorySearchTool,
                 notebook::NotebookEditTool, plan_tool::PlanTool,
-                read::ReadTool, registry::ToolRegistry, slash_command::SlashCommandTool,
+                read::ReadTool, registry::ToolRegistry, session_search::SessionSearchTool,
+                slash_command::SlashCommandTool,
                 task::TaskTool, web_search::WebSearchTool, write::WriteTool,
             },
         },
@@ -88,6 +89,8 @@ pub(crate) async fn cmd_chat(
     tool_registry.register(Arc::new(PlanTool));
     // Memory search (built-in FTS5, always available)
     tool_registry.register(Arc::new(MemorySearchTool));
+    // Session search — hybrid QMD search across all session message history
+    tool_registry.register(Arc::new(SessionSearchTool::new(db.pool().clone())));
     // Config management (read/write config.toml, commands.toml)
     tool_registry.register(Arc::new(ConfigTool));
     // Slash command invocation (agent can call any slash command)

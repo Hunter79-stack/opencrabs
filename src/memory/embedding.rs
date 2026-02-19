@@ -58,14 +58,14 @@ fn check_cpu_features() -> Result<(), String> {
 }
 
 /// Returns the engine if already initialized, without triggering a download.
-pub(super) fn engine_if_ready() -> Option<&'static Mutex<EmbeddingEngine>> {
+pub fn engine_if_ready() -> Option<&'static Mutex<EmbeddingEngine>> {
     ENGINE.get()
 }
 
 /// Generate and store an embedding for content. No-ops if engine not yet initialized.
 ///
 /// Lock ordering: engine first (embed), then store (insert). Never both at once.
-pub(super) fn embed_content(store: &Mutex<Store>, body: &str) {
+pub fn embed_content(store: &Mutex<Store>, body: &str) {
     let engine_mutex = match engine_if_ready() {
         Some(e) => e,
         None => return,

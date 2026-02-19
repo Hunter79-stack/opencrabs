@@ -364,6 +364,9 @@ pub struct OnboardingWizard {
     pub generated_tools: Option<String>,
     pub generated_memory: Option<String>,
 
+    // Model filter (live search in model list)
+    pub model_filter: String,
+
     // Navigation
     pub focused_field: usize,
     pub error_message: Option<String>,
@@ -447,6 +450,7 @@ impl OnboardingWizard {
             generated_tools: None,
             generated_memory: None,
 
+            model_filter: String::new(),
             focused_field: 0,
             error_message: None,
         }
@@ -462,21 +466,40 @@ impl OnboardingWizard {
         self.selected_provider == PROVIDERS.len() - 1
     }
 
-    /// Number of models available for current provider (fetched or static)
-    pub fn model_count(&self) -> usize {
+    /// All model names for the current provider (fetched or static fallback)
+    pub fn all_model_names(&self) -> Vec<&str> {
         if !self.fetched_models.is_empty() {
-            self.fetched_models.len()
+            self.fetched_models.iter().map(|s| s.as_str()).collect()
         } else {
-            self.current_provider().models.len()
+            self.current_provider().models.to_vec()
         }
     }
 
-    /// Get the selected model name
-    pub fn selected_model_name(&self) -> &str {
-        if !self.fetched_models.is_empty() {
-            self.fetched_models.get(self.selected_model).map(|s| s.as_str()).unwrap_or("default")
+    /// Model names filtered by `model_filter` (case-insensitive substring match).
+    /// Returns all models when filter is empty.
+    pub fn filtered_model_names(&self) -> Vec<&str> {
+        let all = self.all_model_names();
+        if self.model_filter.is_empty() {
+            all
         } else {
-            self.current_provider().models.get(self.selected_model).unwrap_or(&"default")
+            let q = self.model_filter.to_lowercase();
+            all.into_iter().filter(|m| m.to_lowercase().contains(&q)).collect()
+        }
+    }
+
+    /// Number of models available after applying the current filter
+    pub fn model_count(&self) -> usize {
+        self.filtered_model_names().len()
+    }
+
+    /// Get the selected model name (resolves through filter)
+    pub fn selected_model_name(&self) -> &str {
+        let filtered = self.filtered_model_names();
+        if let Some(name) = filtered.get(self.selected_model) {
+            name
+        } else {
+            // fallback: first unfiltered model
+            self.all_model_names().first().copied().unwrap_or("default")
         }
     }
 
@@ -812,8 +835,13 @@ impl OnboardingWizard {
     /// Handle key events for the current step
     /// Returns `WizardAction` indicating what the app should do
     pub fn handle_key(&mut self, event: KeyEvent) -> WizardAction {
-        // Global: Escape goes back
+        // Global: Escape goes back (but if model filter is active, clear it first)
         if event.code == KeyCode::Esc {
+            if !self.model_filter.is_empty() {
+                self.model_filter.clear();
+                self.selected_model = 0;
+                return WizardAction::None;
+            }
             if self.prev_step() {
                 return WizardAction::Cancel;
             }
@@ -875,6 +903,7 @@ impl OnboardingWizard {
                 KeyCode::Up | KeyCode::Char('k') => {
                     self.selected_provider = self.selected_provider.saturating_sub(1);
                     self.selected_model = 0;
+                    self.model_filter.clear();
                     self.api_key_input.clear();
                     self.fetched_models.clear();
                     self.detect_existing_key();
@@ -883,6 +912,7 @@ impl OnboardingWizard {
                     self.selected_provider =
                         (self.selected_provider + 1).min(PROVIDERS.len() - 1);
                     self.selected_model = 0;
+                    self.model_filter.clear();
                     self.api_key_input.clear();
                     self.fetched_models.clear();
                     self.detect_existing_key();
@@ -932,18 +962,25 @@ impl OnboardingWizard {
                 _ => {}
             },
             AuthField::Model => match event.code {
-                KeyCode::Up | KeyCode::Char('k')
-                    if event.modifiers.is_empty() || event.code == KeyCode::Up =>
-                {
+                KeyCode::Up => {
                     self.selected_model = self.selected_model.saturating_sub(1);
                 }
-                KeyCode::Down | KeyCode::Char('j')
-                    if event.modifiers.is_empty() || event.code == KeyCode::Down =>
-                {
+                KeyCode::Down => {
                     let count = self.model_count();
                     if count > 0 {
-                        self.selected_model =
-                            (self.selected_model + 1).min(count - 1);
+                        self.selected_model = (self.selected_model + 1).min(count - 1);
+                    }
+                }
+                KeyCode::Char(c) if event.modifiers.is_empty() => {
+                    self.model_filter.push(c);
+                    self.selected_model = 0; // reset selection on filter change
+                }
+                KeyCode::Backspace => {
+                    if self.model_filter.is_empty() {
+                        self.auth_field = AuthField::ApiKey;
+                    } else {
+                        self.model_filter.pop();
+                        self.selected_model = 0;
                     }
                 }
                 KeyCode::Enter => {
@@ -951,6 +988,8 @@ impl OnboardingWizard {
                 }
                 KeyCode::BackTab => {
                     self.auth_field = AuthField::ApiKey;
+                    self.model_filter.clear();
+                    self.selected_model = 0;
                 }
                 KeyCode::Tab => {
                     self.next_step();

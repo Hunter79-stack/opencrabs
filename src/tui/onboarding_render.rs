@@ -48,23 +48,29 @@ pub fn render_onboarding(f: &mut Frame, wizard: &OnboardingWizard) {
         lines.push(Line::from(""));
     }
 
-    // Step-specific content
-    match step {
-        OnboardingStep::ModeSelect => render_mode_select(&mut lines, wizard),
+    // Step-specific content; ProviderAuth returns a focused-line hint for scrolling
+    let focused_line: usize = match step {
         OnboardingStep::ProviderAuth => render_provider_auth(&mut lines, wizard),
-        OnboardingStep::MessagingSetup => render_messaging_setup(&mut lines, wizard),
-        OnboardingStep::Workspace => render_workspace(&mut lines, wizard),
-        OnboardingStep::Gateway => render_gateway(&mut lines, wizard),
-        OnboardingStep::Channels => render_channels(&mut lines, wizard),
-        OnboardingStep::TelegramSetup => render_telegram_setup(&mut lines, wizard),
-        OnboardingStep::DiscordSetup => render_discord_setup(&mut lines, wizard),
-        OnboardingStep::SlackSetup => render_slack_setup(&mut lines, wizard),
-        OnboardingStep::VoiceSetup => render_voice_setup(&mut lines, wizard),
-        OnboardingStep::Daemon => render_daemon(&mut lines, wizard),
-        OnboardingStep::HealthCheck => render_health_check(&mut lines, wizard),
-        OnboardingStep::BrainSetup => render_brain_setup(&mut lines, wizard),
-        OnboardingStep::Complete => render_complete(&mut lines, wizard),
-    }
+        other => {
+            match other {
+                OnboardingStep::ModeSelect => render_mode_select(&mut lines, wizard),
+                OnboardingStep::MessagingSetup => render_messaging_setup(&mut lines, wizard),
+                OnboardingStep::Workspace => render_workspace(&mut lines, wizard),
+                OnboardingStep::Gateway => render_gateway(&mut lines, wizard),
+                OnboardingStep::Channels => render_channels(&mut lines, wizard),
+                OnboardingStep::TelegramSetup => render_telegram_setup(&mut lines, wizard),
+                OnboardingStep::DiscordSetup => render_discord_setup(&mut lines, wizard),
+                OnboardingStep::SlackSetup => render_slack_setup(&mut lines, wizard),
+                OnboardingStep::VoiceSetup => render_voice_setup(&mut lines, wizard),
+                OnboardingStep::Daemon => render_daemon(&mut lines, wizard),
+                OnboardingStep::HealthCheck => render_health_check(&mut lines, wizard),
+                OnboardingStep::BrainSetup => render_brain_setup(&mut lines, wizard),
+                OnboardingStep::Complete => render_complete(&mut lines, wizard),
+                OnboardingStep::ProviderAuth => unreachable!(),
+            }
+            0
+        }
+    };
 
     // Error message
     if let Some(ref err) = wizard.error_message {
@@ -110,35 +116,99 @@ pub fn render_onboarding(f: &mut Frame, wizard: &OnboardingWizard) {
         lines.push(Line::from(footer));
     }
 
-    // Add bottom padding to match the top empty line
+    // Bottom padding
     lines.push(Line::from(""));
 
-    // Calculate actual content height: lines + 2 for top/bottom border
-    let content_height = (lines.len() as u16).saturating_add(2);
-    // Clamp to available area
-    let box_height = content_height.min(area.height.saturating_sub(2));
+    // --- Layout calculations ---
     let box_width = 64u16.min(area.width.saturating_sub(4));
     let inner_width = box_width.saturating_sub(2) as usize; // inside borders
 
-    // Center each line manually within the box using space padding
+    // The header occupies lines 0..header_end (progress dots, title, subtitle).
+    // These lines AND the footer/empty lines get centered.
+    // Step-specific content lines (radio buttons, fields, descriptions) stay
+    // left-aligned as a group so they don't drift relative to each other.
+    let header_end: usize = if step != OnboardingStep::Complete { 6 } else { 0 };
+
+    // Find where the footer starts (the nav line near the bottom).
+    // The footer only exists on non-Complete steps: empty separator + nav line + bottom padding.
+    let footer_start: usize = if step != OnboardingStep::Complete && lines.len() >= 3 {
+        lines.len() - 3 // empty separator, footer line, bottom padding
+    } else {
+        lines.len() // no footer to center separately
+    };
+
+    // Center the step content block as a whole: find max width of content
+    // lines and add uniform left padding to shift the whole block to center.
+    let content_max_width: usize = lines[header_end..footer_start]
+        .iter()
+        .map(|line| {
+            line.spans.iter().map(|s| {
+                use unicode_width::UnicodeWidthStr;
+                s.content.width()
+            }).sum::<usize>()
+        })
+        .max()
+        .unwrap_or(0);
+    let content_pad = if content_max_width > 0 && content_max_width < inner_width {
+        (inner_width - content_max_width) / 2
+    } else {
+        0
+    };
+
     let centered_lines: Vec<Line<'static>> = lines
         .into_iter()
-        .map(|line| {
-            // Calculate the display width of the line
+        .enumerate()
+        .map(|(i, line)| {
             let line_width: usize = line.spans.iter().map(|s| {
                 use unicode_width::UnicodeWidthStr;
                 s.content.width()
             }).sum();
-            if line_width >= inner_width || line_width == 0 {
-                line // too wide or empty, leave as-is
+
+            if line_width == 0 {
+                return line; // empty lines stay empty
+            }
+
+            if i < header_end || i >= footer_start {
+                // Header and footer: center each line independently
+                if line_width >= inner_width {
+                    line
+                } else {
+                    let pad = (inner_width - line_width) / 2;
+                    let mut spans = vec![Span::raw(" ".repeat(pad))];
+                    spans.extend(line.spans);
+                    Line::from(spans)
+                }
             } else {
-                let pad = (inner_width - line_width) / 2;
-                let mut spans = vec![Span::raw(" ".repeat(pad))];
-                spans.extend(line.spans);
-                Line::from(spans)
+                // Step content: uniform left padding so the block stays aligned
+                if content_pad > 0 {
+                    let mut spans = vec![Span::raw(" ".repeat(content_pad))];
+                    spans.extend(line.spans);
+                    Line::from(spans)
+                } else {
+                    line
+                }
             }
         })
         .collect();
+
+    // Calculate actual content height: lines + 2 for top/bottom border
+    let content_height = (centered_lines.len() as u16).saturating_add(2);
+    // Clamp to available area
+    let box_height = content_height.min(area.height.saturating_sub(2));
+    // Inner visible rows (no borders) — used for scroll calculation
+    let visible_rows = box_height.saturating_sub(2) as usize;
+    // For ProviderAuth: scroll so the focused element stays visible,
+    // but always keep at least 1 blank line at top for padding.
+    let scroll_offset: u16 = if focused_line > 2 && centered_lines.len() > visible_rows {
+        let target = focused_line.saturating_sub(2);
+        let max_scroll = centered_lines.len().saturating_sub(visible_rows);
+        // Never scroll past line 1 so the top padding line (index 0) stays visible
+        let clamped = target.min(max_scroll);
+        // Keep at least 1 line of top padding visible
+        if clamped > 0 { clamped.saturating_sub(0) as u16 } else { 0 }
+    } else {
+        0
+    };
 
     // Center the wizard box on screen using Flex::Center
     let v_chunks = Layout::default()
@@ -179,6 +249,12 @@ pub fn render_onboarding(f: &mut Frame, wizard: &OnboardingWizard) {
         )
         .alignment(Alignment::Left)
         .wrap(Wrap { trim: false });
+    // Only apply scroll when needed — scroll((0,0)) can interact with Wrap
+    let paragraph = if scroll_offset > 0 {
+        paragraph.scroll((scroll_offset, 0))
+    } else {
+        paragraph
+    };
 
     f.render_widget(paragraph, wizard_area);
 }
@@ -244,10 +320,13 @@ fn render_mode_select(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizard)
     )));
 }
 
-fn render_provider_auth(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizard) {
+/// Returns the line index (in `lines`) of the currently focused element —
+/// used by `render_onboarding` to scroll the Paragraph and keep it visible.
+fn render_provider_auth(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizard) -> usize {
     let is_custom = wizard.is_custom_provider();
+    let mut focused_line: usize = 0;
 
-    // Provider list
+    // Provider list — no scroll needed, always at top
     for (i, provider) in PROVIDERS.iter().enumerate() {
         let selected = i == wizard.selected_provider;
         let focused = wizard.auth_field == AuthField::Provider;
@@ -354,6 +433,11 @@ fn render_provider_auth(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizar
         let model_count = wizard.model_count();
         if model_count > 0 || wizard.models_fetching {
             lines.push(Line::from(""));
+            // Record scroll anchor: 2 lines above the Model: label so the key
+            // line stays visible as context when scrolling into the model section.
+            if model_focused {
+                focused_line = lines.len().saturating_sub(1);
+            }
             let label = if wizard.models_fetching {
                 "  Model: (fetching...)".to_string()
             } else {
@@ -364,41 +448,86 @@ fn render_provider_auth(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizar
                 Style::default().fg(if model_focused { BRAND_BLUE } else { Color::DarkGray }),
             )));
 
-            if !wizard.fetched_models.is_empty() {
-                for (i, model) in wizard.fetched_models.iter().enumerate() {
-                    let selected = i == wizard.selected_model;
-                    let prefix = if selected && model_focused { " > " } else { "   " };
-                    let marker = if selected { "(*)" } else { "( )" };
-                    lines.push(Line::from(vec![
-                        Span::styled(
-                            format!("  {}{} ", prefix, marker),
-                            Style::default().fg(if selected { ACCENT_GOLD } else { Color::DarkGray }),
-                        ),
-                        Span::styled(
-                            model.to_string(),
-                            Style::default().fg(if selected { Color::White } else { Color::DarkGray }),
-                        ),
-                    ]));
+            const MAX_VISIBLE_MODELS: usize = 8;
+
+            // Helper: render a windowed slice of models, keeping selection visible
+            let render_model_window =
+                |lines: &mut Vec<Line<'static>>,
+                 models: &[&str],
+                 selected: usize,
+                 focused: bool| {
+                    let total = models.len();
+                    let (start, end) = if total <= MAX_VISIBLE_MODELS {
+                        (0, total)
+                    } else {
+                        let half = MAX_VISIBLE_MODELS / 2;
+                        let s = selected.saturating_sub(half).min(total - MAX_VISIBLE_MODELS);
+                        (s, s + MAX_VISIBLE_MODELS)
+                    };
+                    if start > 0 {
+                        lines.push(Line::from(Span::styled(
+                            format!("  ↑ {} more", start),
+                            Style::default().fg(Color::DarkGray),
+                        )));
+                    }
+                    for (offset, model) in models[start..end].iter().enumerate() {
+                        let i = start + offset;
+                        let is_sel = i == selected;
+                        let prefix = if is_sel && focused { " > " } else { "   " };
+                        let marker = if is_sel { "(*)" } else { "( )" };
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                format!("  {}{} ", prefix, marker),
+                                Style::default()
+                                    .fg(if is_sel { ACCENT_GOLD } else { Color::DarkGray }),
+                            ),
+                            Span::styled(
+                                model.to_string(),
+                                Style::default()
+                                    .fg(if is_sel { Color::White } else { Color::DarkGray }),
+                            ),
+                        ]));
+                    }
+                    if end < total {
+                        lines.push(Line::from(Span::styled(
+                            format!("  ↓ {} more", total - end),
+                            Style::default().fg(Color::DarkGray),
+                        )));
+                    }
+                };
+
+            if !wizard.models_fetching {
+                // Filter input (shown when model field is focused)
+                if model_focused {
+                    let cursor = "█";
+                    let filter_display = if wizard.model_filter.is_empty() {
+                        format!("  / type to filter…{}", cursor)
+                    } else {
+                        format!("  / {}{}", wizard.model_filter, cursor)
+                    };
+                    lines.push(Line::from(Span::styled(
+                        filter_display,
+                        Style::default().fg(if wizard.model_filter.is_empty() {
+                            Color::DarkGray
+                        } else {
+                            Color::White
+                        }),
+                    )));
                 }
-            } else if !wizard.models_fetching {
-                for (i, model) in wizard.current_provider().models.iter().enumerate() {
-                    let selected = i == wizard.selected_model;
-                    let prefix = if selected && model_focused { " > " } else { "   " };
-                    let marker = if selected { "(*)" } else { "( )" };
-                    lines.push(Line::from(vec![
-                        Span::styled(
-                            format!("  {}{} ", prefix, marker),
-                            Style::default().fg(if selected { ACCENT_GOLD } else { Color::DarkGray }),
-                        ),
-                        Span::styled(
-                            model.to_string(),
-                            Style::default().fg(if selected { Color::White } else { Color::DarkGray }),
-                        ),
-                    ]));
+
+                let filtered = wizard.filtered_model_names();
+                if filtered.is_empty() {
+                    lines.push(Line::from(Span::styled(
+                        "  no models match".to_string(),
+                        Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                    )));
+                } else {
+                    render_model_window(lines, &filtered, wizard.selected_model, model_focused);
                 }
             }
         }
     }
+    focused_line
 }
 
 fn render_messaging_setup(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizard) {

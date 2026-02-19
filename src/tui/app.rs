@@ -320,6 +320,11 @@ pub struct App {
     /// Key: (message_id, content_width). Invalidated on terminal resize.
     pub render_cache: HashMap<(Uuid, u16), Vec<Line<'static>>>,
 
+    // History paging — how many DB messages are hidden above the current view
+    pub hidden_older_messages: usize,
+    pub oldest_displayed_sequence: i32,
+    pub display_token_count: usize,
+
     /// Pending sudo password request (shown as inline dialog)
     pub sudo_pending: Option<SudoPasswordRequest>,
     /// Raw password text being typed (never displayed, only dots)
@@ -411,6 +416,9 @@ impl App {
             rebuild_status: None,
             resume_session_id: None,
             render_cache: HashMap::new(),
+            hidden_older_messages: 0,
+            oldest_displayed_sequence: 0,
+            display_token_count: 0,
             sudo_pending: None,
             sudo_input: String::new(),
             session_service: SessionService::new(context.clone()),
@@ -692,18 +700,13 @@ impl App {
                 }
             }
             TuiEvent::CompactionSummary(summary) => {
-                // Prune old display messages to prevent unbounded growth.
-                // Keep last N messages (mirrors agent compaction — TUI doesn't need
-                // to display messages the agent has already forgotten).
-                const MAX_DISPLAY_MESSAGES: usize = 500;
-                if self.messages.len() > MAX_DISPLAY_MESSAGES {
-                    let remove_count = self.messages.len() - MAX_DISPLAY_MESSAGES;
-                    self.messages.drain(..remove_count);
-                    self.render_cache.clear();
-                }
-                // Show the compaction summary as a system message in chat.
-                // Short label in `content` (always visible), full summary in
-                // `details` (expand with Ctrl+O) so it doesn't flood the chat.
+                // Agent has summarized history — clear the TUI view for a fresh start.
+                // Place the summary at top so the user sees what was retained.
+                self.messages.clear();
+                self.render_cache.clear();
+                self.hidden_older_messages = 0;
+                self.oldest_displayed_sequence = 0;
+                self.display_token_count = 0;
                 self.messages.push(DisplayMessage {
                     id: Uuid::new_v4(),
                     role: "system".to_string(),
@@ -718,6 +721,7 @@ impl App {
                     tool_group: None,
                     plan_approval: None,
                 });
+                // auto_scroll stays true — new messages continue below
             }
             TuiEvent::RestartReady(status) => {
                 self.rebuild_status = Some(status);
@@ -1541,22 +1545,27 @@ impl App {
                     Some("Press Esc again to clear input".to_string());
             }
         } else if event.code == KeyCode::Char('o') && event.modifiers == KeyModifiers::CONTROL {
-            // Ctrl+O — toggle expand/collapse on ALL tool groups in the session
-            // Determine target state from the active group or most recent group
-            let target = if let Some(ref group) = self.active_tool_group {
-                !group.expanded
-            } else if let Some(msg) = self.messages.iter().rev()
-                .find(|m| m.tool_group.is_some()) {
-                !msg.tool_group.as_ref().expect("tool_group checked is_some above").expanded
+            if self.hidden_older_messages > 0 && self.display_token_count < 300_000 {
+                // Load more history from DB
+                self.load_more_history().await?;
             } else {
-                true
-            };
-            if let Some(ref mut group) = self.active_tool_group {
-                group.expanded = target;
-            }
-            for msg in self.messages.iter_mut() {
-                if let Some(ref mut group) = msg.tool_group {
+                // Ctrl+O — toggle expand/collapse on ALL tool groups in the session
+                // Determine target state from the active group or most recent group
+                let target = if let Some(ref group) = self.active_tool_group {
+                    !group.expanded
+                } else if let Some(msg) = self.messages.iter().rev()
+                    .find(|m| m.tool_group.is_some()) {
+                    !msg.tool_group.as_ref().expect("tool_group checked is_some above").expanded
+                } else {
+                    true
+                };
+                if let Some(ref mut group) = self.active_tool_group {
                     group.expanded = target;
+                }
+                for msg in self.messages.iter_mut() {
+                    if let Some(ref mut group) = msg.tool_group {
+                        group.expanded = target;
+                    }
                 }
             }
         } else if keys::is_page_up(&event) {
@@ -1910,7 +1919,18 @@ impl App {
             .await?;
 
         self.current_session = Some(session.clone());
-        self.messages = messages.into_iter().flat_map(Self::expand_message).collect();
+        let (display, hidden) = Self::trim_messages_to_display_budget(&messages, 200_000);
+        self.hidden_older_messages = hidden;
+        self.oldest_displayed_sequence = display.first().map(|m| m.sequence).unwrap_or(0);
+        self.display_token_count = display.iter()
+            .map(|m| crate::brain::tokenizer::count_tokens(&m.content))
+            .sum();
+        let mut expanded: Vec<DisplayMessage> = display.into_iter()
+            .flat_map(Self::expand_message).collect();
+        if hidden > 0 {
+            expanded.insert(0, Self::make_history_marker(hidden));
+        }
+        self.messages = expanded;
         self.auto_scroll = true;
         self.scroll_offset = 0;
         self.approval_auto_session = false;
@@ -1925,6 +1945,102 @@ impl App {
         // until the next API response provides real input_tokens from the model.
         self.last_input_tokens = None;
 
+        Ok(())
+    }
+
+    /// Trim a list of DB messages to fit within a token budget (newest messages kept).
+    /// Returns (kept_messages, hidden_count).
+    fn trim_messages_to_display_budget(
+        msgs: &[crate::db::models::Message],
+        budget: usize,
+    ) -> (Vec<crate::db::models::Message>, usize) {
+        let mut tokens = 0usize;
+        let mut keep = 0usize;
+        for msg in msgs.iter().rev() {
+            let t = crate::brain::tokenizer::count_tokens(&msg.content);
+            if tokens + t > budget {
+                break;
+            }
+            tokens += t;
+            keep += 1;
+        }
+        let hidden = msgs.len() - keep;
+        (msgs[hidden..].to_vec(), hidden)
+    }
+
+    /// Build the dim italic history marker shown at the top of the message list.
+    fn make_history_marker(count: usize) -> DisplayMessage {
+        DisplayMessage {
+            id: Uuid::new_v4(),
+            role: "history_marker".to_string(),
+            content: format!("↑ {} older messages hidden · Ctrl+O to load more", count),
+            timestamp: chrono::Utc::now(),
+            token_count: None,
+            cost: None,
+            approval: None,
+            approve_menu: None,
+            details: None,
+            expanded: false,
+            tool_group: None,
+            plan_approval: None,
+        }
+    }
+
+    /// Load an older batch of messages (up to 100k tokens) from the DB and prepend
+    /// them to the current display list.  Called by Ctrl+O when hidden_older_messages > 0.
+    async fn load_more_history(&mut self) -> Result<()> {
+        let session_id = match self.current_session.as_ref().map(|s| s.id) {
+            Some(id) => id,
+            None => return Ok(()),
+        };
+        let all = self
+            .message_service
+            .list_messages_for_session(session_id)
+            .await?;
+        // Messages older than the current oldest displayed
+        let older: Vec<_> = all
+            .into_iter()
+            .filter(|m| m.sequence < self.oldest_displayed_sequence)
+            .collect(); // already ordered ASC by sequence
+
+        let budget = 100_000usize;
+        let mut tokens = 0usize;
+        let mut keep = 0usize;
+        for msg in older.iter().rev() {
+            let t = crate::brain::tokenizer::count_tokens(&msg.content);
+            if tokens + t > budget {
+                break;
+            }
+            tokens += t;
+            keep += 1;
+        }
+        let hidden_still = older.len().saturating_sub(keep);
+        let to_add = &older[older.len() - keep..];
+
+        // Remove existing history_marker at front
+        if self
+            .messages
+            .first()
+            .map(|m| m.role == "history_marker")
+            .unwrap_or(false)
+        {
+            self.messages.remove(0);
+        }
+
+        let mut new_msgs: Vec<DisplayMessage> = to_add
+            .iter()
+            .cloned()
+            .flat_map(Self::expand_message)
+            .collect();
+        if hidden_still > 0 {
+            new_msgs.insert(0, Self::make_history_marker(hidden_still));
+        }
+        new_msgs.append(&mut self.messages);
+        self.messages = new_msgs;
+        self.hidden_older_messages = hidden_still;
+        self.oldest_displayed_sequence = to_add.first().map(|m| m.sequence).unwrap_or(0);
+        self.display_token_count += tokens;
+        self.render_cache.clear();
         Ok(())
     }
 
