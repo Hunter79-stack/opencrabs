@@ -2150,9 +2150,36 @@ fn render_directory_picker(f: &mut Frame, app: &App, area: Rect) {
 fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
     use crate::tui::onboarding::PROVIDERS;
     
-    let model_count = app.model_selector_models.len() as u16;
+    // Determine which models to show
+    let (display_models, selected_idx, provider_display) = if app.model_selector_showing_providers {
+        // Show selected provider's models when in provider selection mode
+        let selected_provider = &PROVIDERS[app.model_selector_provider_selected];
+        let models: Vec<String> = selected_provider.models.iter().map(|s| s.to_string()).collect();
+        (models, 0, selected_provider.name.split('(').next().unwrap_or(selected_provider.name).trim().to_string())
+    } else {
+        // Show current provider's models
+        let _current_model = app
+            .current_session
+            .as_ref()
+            .and_then(|s| s.model.as_deref())
+            .unwrap_or_else(|| app.provider_model())
+            .to_string();
+        
+        let current_provider_name = app.agent_service().provider_name();
+        let provider_display = match current_provider_name {
+            "anthropic" => "Anthropic Claude",
+            "openai" => "OpenAI",
+            "gemini" => "Google Gemini",
+            "qwen" => "Qwen/DashScope",
+            _ => current_provider_name,
+        };
+        
+        (app.model_selector_models.clone(), app.model_selector_selected, provider_display.to_string())
+    };
+
+    let model_count = display_models.len() as u16;
     let provider_count = PROVIDERS.len() as u16;
-    let dialog_height = (model_count + provider_count + 10).min(area.height.saturating_sub(4));
+    let dialog_height = (model_count + provider_count + 12).min(area.height.saturating_sub(4));
     let dialog_width = 60u16.min(area.width.saturating_sub(4));
 
     // Center the dialog
@@ -2180,39 +2207,44 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
         .and_then(|s| s.model.as_deref())
         .unwrap_or_else(|| app.provider_model());
 
-    let current_provider_name = app.agent_service().provider_name();
-    let current_provider_display = match current_provider_name {
-        "anthropic" => "Anthropic Claude",
-        "openai" => "OpenAI",
-        "gemini" => "Google Gemini",
-        "qwen" => "Qwen/DashScope",
-        _ => current_provider_name,
-    };
-
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(""));
     
-    // Show current provider
+    // Show provider header
     lines.push(Line::from(vec![
         Span::styled("▸ ", Style::default().fg(Color::Rgb(70, 130, 180)).add_modifier(Modifier::BOLD)),
-        Span::styled(current_provider_display, Style::default().fg(Color::Rgb(70, 130, 180)).add_modifier(Modifier::BOLD)),
+        Span::styled(&provider_display, Style::default().fg(Color::Rgb(70, 130, 180)).add_modifier(Modifier::BOLD)),
     ]));
+    
+    // If in provider mode, show API key input
+    if app.model_selector_showing_providers {
+        let key_placeholder = if app.model_selector_api_key.is_empty() {
+            "[paste API key]"
+        } else {
+            "***"
+        };
+        lines.push(Line::from(vec![
+            Span::styled("   Key: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(key_placeholder, Style::default().fg(Color::Green)),
+        ]));
+    }
+    
     lines.push(Line::from(""));
 
-    // Show models for current provider
-    for (idx, model) in app.model_selector_models.iter().enumerate() {
-        let is_selected = !app.model_selector_showing_providers && idx == app.model_selector_selected;
+    // Show models
+    for (idx, model) in display_models.iter().enumerate() {
+        let is_selected = idx == selected_idx;
         let is_active = model == current_model;
 
         let prefix = if is_selected { " > " } else { "   " };
-        let suffix = if is_active { " (active)" } else { "" };
+        let suffix = if is_active && !app.model_selector_showing_providers { " (active)" } else { "" };
 
         let style = if is_selected {
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Rgb(70, 130, 180))
                 .add_modifier(Modifier::BOLD)
-        } else if is_active {
+        } else if is_active && !app.model_selector_showing_providers {
             Style::default()
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD)
@@ -2235,21 +2267,21 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
         ]));
     }
 
-    // Separator
+    // Separator and provider list
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        " ── Other Providers ── ",
+        " ── Providers ── ",
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(""));
 
-    // Show other providers
+    // Show all providers
     for (idx, provider) in PROVIDERS.iter().enumerate() {
-        let is_selected = app.model_selector_showing_providers && idx == app.model_selector_provider_selected;
+        let is_provider_selected = idx == app.model_selector_provider_selected;
         
-        let prefix = if is_selected { " > " } else { "   " };
+        let prefix = if is_provider_selected { " > " } else { "   " };
         
-        let style = if is_selected {
+        let style = if is_provider_selected {
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Rgb(100, 149, 237))
@@ -2258,7 +2290,6 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(Color::White)
         };
 
-        // Show provider name without (recommended) for cleaner display
         let display_name = provider.name.split('(').next().unwrap_or(provider.name).trim();
         
         lines.push(Line::from(vec![
@@ -2278,14 +2309,11 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
                     .fg(Color::Blue)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" Switch Provider  ", Style::default().fg(Color::White)),
+            Span::styled(" Confirm  ", Style::default().fg(Color::White)),
+            Span::styled("[↑/↓]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" Select  ", Style::default().fg(Color::White)),
             Span::styled("[Type]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled(" API Key  ", Style::default().fg(Color::White)),
-            Span::styled(
-                "[Esc]",
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Back", Style::default().fg(Color::White)),
+            Span::styled(" API Key", Style::default().fg(Color::White)),
         ]));
     } else {
         lines.push(Line::from(vec![

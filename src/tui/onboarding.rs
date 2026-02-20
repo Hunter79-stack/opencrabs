@@ -464,8 +464,9 @@ impl OnboardingWizard {
         // Priority: Qwen > Anthropic > OpenAI > Gemini > OpenRouter > Custom
         if config.providers.qwen.as_ref().is_some_and(|p| p.enabled) {
             wizard.selected_provider = 3; // Qwen/DashScope
+            // Load model AFTER setting provider
             if let Some(model) = &config.providers.qwen.as_ref().and_then(|p| p.default_model.clone())
-                && let Some(idx) = wizard.current_provider().models.iter().position(|m| m == model)
+                && let Some(idx) = wizard.current_provider().models.iter().position(|m| *m == model)
             {
                 wizard.selected_model = idx;
             }
@@ -474,33 +475,40 @@ impl OnboardingWizard {
             }
         } else if config.providers.anthropic.as_ref().is_some_and(|p| p.enabled) {
             wizard.selected_provider = 0; // Anthropic
+            // Load model AFTER setting provider
             if let Some(model) = &config.providers.anthropic.as_ref().and_then(|p| p.default_model.clone())
-                && let Some(idx) = wizard.current_provider().models.iter().position(|m| m == model)
+                && let Some(idx) = wizard.current_provider().models.iter().position(|m| *m == model)
             {
                 wizard.selected_model = idx;
             }
         } else if config.providers.openai.as_ref().is_some_and(|p| p.enabled) {
             // Check if it's OpenRouter (has openrouter base URL) or regular OpenAI or custom
+            let mut is_custom = false;
             if let Some(base_url) = &config.providers.openai.as_ref().and_then(|p| p.base_url.clone()) {
                 if base_url.contains("openrouter") {
                     wizard.selected_provider = 4; // OpenRouter
                 } else {
                     wizard.selected_provider = 5; // Custom OpenAI-compatible
                     wizard.custom_base_url = base_url.clone();
+                    is_custom = true;
                 }
             } else {
                 wizard.selected_provider = 1; // OpenAI
             }
+            // Load model AFTER setting provider
             if let Some(model) = &config.providers.openai.as_ref().and_then(|p| p.default_model.clone()) {
-                wizard.custom_model = model.clone();
-                if let Some(idx) = wizard.current_provider().models.iter().position(|m| m == model) {
+                if is_custom {
+                    wizard.custom_model = model.clone();
+                }
+                if let Some(idx) = wizard.current_provider().models.iter().position(|m| *m == model) {
                     wizard.selected_model = idx;
                 }
             }
         } else if config.providers.gemini.as_ref().is_some_and(|p| p.enabled) {
             wizard.selected_provider = 2; // Gemini
+            // Load model AFTER setting provider
             if let Some(model) = &config.providers.gemini.as_ref().and_then(|p| p.default_model.clone())
-                && let Some(idx) = wizard.current_provider().models.iter().position(|m| m == model)
+                && let Some(idx) = wizard.current_provider().models.iter().position(|m| *m == model)
             {
                 wizard.selected_model = idx;
             }

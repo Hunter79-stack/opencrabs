@@ -3757,14 +3757,18 @@ impl App {
                 self.model_selector_base_url.clear();
             }
         } else if self.model_selector_showing_providers {
-            // Provider selection mode
+            // Provider selection mode - show selected provider's models and API key input
             match event.code {
                 crossterm::event::KeyCode::Up => {
                     self.model_selector_provider_selected = self.model_selector_provider_selected.saturating_sub(1);
+                    // Clear API key when switching providers
+                    self.model_selector_api_key.clear();
                 }
                 crossterm::event::KeyCode::Down => {
                     self.model_selector_provider_selected = (self.model_selector_provider_selected + 1)
                         .min(PROVIDERS.len() - 1);
+                    // Clear API key when switching providers
+                    self.model_selector_api_key.clear();
                 }
                 crossterm::event::KeyCode::Char(c) => {
                     // API key input for selected provider
@@ -3774,7 +3778,7 @@ impl App {
                     self.model_selector_api_key.pop();
                 }
                 crossterm::event::KeyCode::Enter => {
-                    // Save provider selection
+                    // Save provider selection and switch
                     self.save_provider_selection(self.model_selector_provider_selected).await?;
                 }
                 _ => {}
@@ -3909,18 +3913,45 @@ impl App {
         }
 
         // Rebuild agent service with new provider
-        self.rebuild_agent_service().await?;
+        if let Err(e) = self.rebuild_agent_service().await {
+            // If rebuild fails, check if it's due to missing API key
+            if api_key.is_none() && provider.keyring_key.is_empty() {
+                // Need API key - show message and stay in provider mode
+                self.push_system_message(format!("API key required for {}. Type it and press Enter.", provider.name.split('(').next().unwrap_or(provider.name).trim()));
+                return Ok(());
+            }
+            return Err(e);
+        }
 
-        // Refresh model list
-        self.model_selector_models = self.agent_service.fetch_models().await;
-        self.model_selector_selected = 0;
-        self.model_selector_showing_providers = false;
-        self.model_selector_api_key.clear();
+        // Get the selected model from the provider's list
+        let selected_model = if let Some(model) = provider.models.get(self.model_selector_selected) {
+            model.to_string()
+        } else if let Some(model) = provider.models.first() {
+            model.to_string()
+        } else {
+            "gpt-4o-mini".to_string()
+        };
 
+        // Save the model to config
+        let section = match provider_idx {
+            0 => "providers.anthropic",
+            1 => "providers.openai",
+            2 => "providers.gemini",
+            3 => "providers.qwen",
+            4 | 5 => "providers.openai",
+            _ => "providers.anthropic",
+        };
+        
+        if let Err(e) = crate::config::Config::write_key(section, "default_model", &selected_model) {
+            tracing::warn!("Failed to persist model to config: {}", e);
+        }
+
+        // Update app state
+        self.default_model_name = selected_model.clone();
+
+        // Close the dialog
         let provider_name = provider.name.split('(').next().unwrap_or(provider.name).trim();
-        self.push_system_message(format!("Provider changed to: {}", provider_name));
-
-        // Close the dialog after successful provider switch
+        self.push_system_message(format!("Provider: {}, Model: {}", provider_name, selected_model));
         self.mode = AppMode::Chat;
 
         Ok(())
