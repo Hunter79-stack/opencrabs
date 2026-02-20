@@ -3893,6 +3893,9 @@ impl App {
         let provider_name = provider.name.split('(').next().unwrap_or(provider.name).trim();
         self.push_system_message(format!("Provider changed to: {}", provider_name));
 
+        // Close the dialog after successful provider switch
+        self.mode = AppMode::Chat;
+
         Ok(())
     }
 

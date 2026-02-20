@@ -2297,7 +2297,7 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
             ),
             Span::styled(" Select  ", Style::default().fg(Color::White)),
             Span::styled(
-                "[P]",
+                "[P/Tab]",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
