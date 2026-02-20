@@ -3787,20 +3787,28 @@ impl App {
             if keys::is_up(&event) {
                 self.model_selector_selected = self.model_selector_selected.saturating_sub(1);
             } else if keys::is_down(&event) {
-                let max_models = if self.model_selector_showing_providers {
-                    PROVIDERS[self.model_selector_provider_selected].models.len()
-                } else {
-                    self.model_selector_models.len()
-                };
+                // Always use selected provider's models
+                let max_models = PROVIDERS[self.model_selector_provider_selected].models.len();
                 if max_models > 0 {
                     self.model_selector_selected = (self.model_selector_selected + 1).min(max_models - 1);
                 }
             }
         }
 
-        // Enter to confirm - save and close
+        // Enter to confirm - but behavior depends on focused field
         if keys::is_enter(&event) {
-            self.save_provider_selection(self.model_selector_provider_selected).await?;
+            if self.model_selector_focused_field == 0 {
+                // On provider field - rebuild agent service, switch to model field
+                self.save_provider_selection(self.model_selector_provider_selected).await?;
+                // After saving, switch to model selection field
+                self.model_selector_focused_field = 2;
+            } else if self.model_selector_focused_field == 1 {
+                // On API key field - switch to model field (models will show from selected provider)
+                self.model_selector_focused_field = 2;
+            } else {
+                // On model field - save and close
+                self.save_provider_selection(self.model_selector_provider_selected).await?;
+            }
         }
 
         Ok(())
