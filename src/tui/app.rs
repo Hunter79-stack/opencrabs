@@ -746,9 +746,6 @@ impl App {
                     text.len(), self.active_tool_group.is_some(), self.streaming_response.is_some());
                 // Reset timer for next thinking phase
                 self.processing_started_at = Some(std::time::Instant::now());
-                // Clear streaming response — text was already shown live via streaming chunks,
-                // now it becomes a permanent message in the chat history.
-                self.streaming_response = None;
 
                 // Check if there was a queued message that was just processed
                 // If so, add it at the VERY END (after all assistant messages and tool calls)
@@ -772,7 +769,9 @@ impl App {
                     tracing::info!("[TUI] Added queued message at end of conversation");
                 }
 
-                // Add the intermediate text as an assistant message FIRST
+                // Add the intermediate text as an assistant message
+                // and attach any active tool_group to it (so tool calls appear inline, not at bottom)
+                let attached_tool_group = self.active_tool_group.take();
                 self.messages.push(DisplayMessage {
                     id: Uuid::new_v4(),
                     role: "assistant".to_string(),
@@ -784,29 +783,10 @@ impl App {
                     approve_menu: None,
                     details: None,
                     expanded: false,
-                    tool_group: None,
+                    tool_group: attached_tool_group, // Attach tool calls to this message
                     plan_approval: None,
                 });
 
-                // THEN add tool group AFTER the text so it appears below
-                // (natural flow: text → tool call → text → tool call)
-                if let Some(group) = self.active_tool_group.take() {
-                    let count = group.calls.len();
-                    self.messages.push(DisplayMessage {
-                        id: Uuid::new_v4(),
-                        role: "tool_group".to_string(),
-                        content: format!("{} tool call{}", count, if count == 1 { "" } else { "s" }),
-                        timestamp: chrono::Utc::now(),
-                        token_count: None,
-                        cost: None,
-                        approval: None,
-                        approve_menu: None,
-                        details: None,
-                        expanded: false,
-                        tool_group: Some(group),
-                        plan_approval: None,
-                    });
-                }
                 if self.auto_scroll {
                     self.scroll_offset = 0;
                 }
@@ -2922,23 +2902,30 @@ impl App {
             tracing::info!("[TUI] Added queued message at response complete");
         }
 
-        // Finalize active tool group into a display message
+        // Finalize active tool group by attaching it to the last assistant message
+        // (so tool calls appear inline, not as separate message at bottom)
         if let Some(group) = self.active_tool_group.take() {
-            let count = group.calls.len();
-            self.messages.push(DisplayMessage {
-                id: Uuid::new_v4(),
-                role: "tool_group".to_string(),
-                content: format!("{} tool call{}", count, if count == 1 { "" } else { "s" }),
-                timestamp: chrono::Utc::now(),
-                token_count: None,
-                cost: None,
-                approval: None,
-                approve_menu: None,
-                details: None,
-                expanded: false,
-                tool_group: Some(group),
-                plan_approval: None,
-            });
+            // Try to attach to the last assistant message
+            if let Some(last_msg) = self.messages.iter_mut().rev().find(|m| m.role == "assistant") {
+                last_msg.tool_group = Some(group);
+            } else {
+                // Fallback: add as separate message if no assistant message exists
+                let count = group.calls.len();
+                self.messages.push(DisplayMessage {
+                    id: Uuid::new_v4(),
+                    role: "tool_group".to_string(),
+                    content: format!("{} tool call{}", count, if count == 1 { "" } else { "s" }),
+                    timestamp: chrono::Utc::now(),
+                    token_count: None,
+                    cost: None,
+                    approval: None,
+                    approve_menu: None,
+                    details: None,
+                    expanded: false,
+                    tool_group: Some(group),
+                    plan_approval: None,
+                });
+            }
         }
 
         // Reload user commands (agent may have written new ones to commands.json)
