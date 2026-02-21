@@ -2183,6 +2183,24 @@ pub async fn fetch_provider_models(provider_index: usize, api_key: Option<&str>)
     #[derive(serde::Deserialize)]
     struct ModelsResponse { data: Vec<ModelEntry> }
 
+    // Handle Minimax specially - no /models API, must use config
+    if provider_index == 4 {
+        // Minimax — NO /models API endpoint, must use config.models
+        if let Ok(config) = crate::config::Config::load() {
+            if let Some(p) = &config.providers.minimax {
+                if !p.models.is_empty() {
+                    return p.models.clone();
+                }
+                // Fall back to default_model if no models list
+                if let Some(model) = &p.default_model {
+                    return vec![model.clone()];
+                }
+            }
+        }
+        // Return hardcoded defaults if no config
+        return vec!["MiniMax-M2.5".to_string(), "MiniMax-M2.1".to_string()];
+    }
+
     let client = reqwest::Client::new();
 
     let result = match provider_index {
@@ -2214,12 +2232,12 @@ pub async fn fetch_provider_models(provider_index: usize, api_key: Option<&str>)
             }
             req.send().await
         }
-        4 => {
+        3 => {
             // OpenRouter — /api/v1/models
             let mut req = client.get("https://openrouter.ai/api/v1/models");
             if let Some(key) = api_key
                 && !key.is_empty() {
-                    req = req.header("Authorization", format!("Bearer {}", key));
+                req = req.header("Authorization", format!("Bearer {}", key));
             }
             req.send().await
         }
