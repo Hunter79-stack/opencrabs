@@ -5,13 +5,45 @@ All notable changes to OpenCrab will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.24] - 2026-02-19
+## [0.2.24] - 2026-02-21
+
+### Added
+- **MiniMax Provider Support** — Added MiniMax as new LLM provider (OpenAI-compatible). Does not have /models endpoint, uses config_models for model list
+- **Onboarding Wizard** — Full onboarding flow for first-time setup with provider selection
+- **Model Selector** — Slash command `/models` to change provider and model with live fetching, search filter
+- **Tool Call Expanded View** — Ctrl+O expands tool context with gray background; diff coloring (+ green, - red)
+- **API Keys in keys.toml** — API keys now stored in separate `~/.opencrabs/keys.toml` (chmod 600)
+- **STT/TTS Provider Config** — Added `providers.stt.groq` and `providers.tts.openai` config sections
 
 ### Fixed
+- **MiniMax Tool Calls** — Fixed tool call parsing for MiniMax (empty arguments issue)
+- **Context Compaction Crash** — Fixed orphaned tool_result crash after compaction
+- **Onboarding Persistence** — Provider selection and settings now persist correctly
+- **Model Selector Flow** — Multiple fixes for persistence, search, scrolling, Enter key behavior
 - **Compaction Crash (400 — Orphaned tool_result)** — After any trim or compaction, a `user(tool_result)` message could be left at the front of history without its preceding `assistant(tool_use)`. The Anthropic API rejects this with a 400 error, crashing the next compaction attempt. Fixed at three layers: `trim_to_fit` and `trim_to_target` now call `drop_leading_orphan_tool_results()` after each removal; `compact_with_summary` advances `keep_start` past any leading orphaned tool_result messages; `compact_context` skips them before sending to the API as a safety net. Conversation continues normally after compaction with no tool call drops
 - **Compaction Summary as Assistant Message** — Compaction summary was stored in a `details` field and hidden behind Ctrl+O. Now rendered as a real assistant chat message in the conversation flow. Tool calls that follow appear below it as normal tool groups with Ctrl+O expand/collapse
 - **config.toml Model Priority over .env** — `ANTHROPIC_MAX_MODEL` env var was overwriting the model set in `config.toml`, reversing the intended priority. Now `config.toml` wins; `.env` is only a fallback when no model is configured in TOML
 - **Stale Terminal on exec() Restart** — `/rebuild` hot-restart left stale rendered content from the previous process visible briefly. Terminal is now fully cleared immediately after the new process takes over
+
+### Changed
+- **Remove Qwen and Azure** — These providers are no longer supported
+- **README Updated** — Added MiniMax documentation, keys.toml instructions
+
+## [0.2.23] - 2026-02-20
+
+### Added
+- **session_search Tool** — Hybrid FTS5+vector search across all chat sessions (list/search operations)
+- **History Paging** — Cap initial display at 200k tokens, Ctrl+O loads 100k more from DB
+- **Onboarding Model Filter** — Type to search models, Esc clears filter
+
+### Fixed
+- **Onboard Centering** — Header/footer center independently, content block centers as uniform group
+- **Onboard Scroll** — ProviderAuth tracks focused_line for proper scroll anchoring
+- **Content Clipping** — Content no longer clips top border on overflow screens
+
+### Changed
+- **Compaction Display** — Now clears TUI display fully, shows summary as fresh start
+- **Render history_marker** — Rendered as dim italic in chat view
 
 ## [0.2.22] - 2026-02-19
 

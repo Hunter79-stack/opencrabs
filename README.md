@@ -164,6 +164,18 @@ Access 400+ models from every major provider through a single API key — Anthro
 
 Model list is **fetched live** from the OpenRouter API during onboarding and via `/models` — no binary update needed when new models are added.
 
+### MiniMax
+
+**Models:** `MiniMax-M2.5`, `MiniMax-M2.1`, `MiniMax-Text-01`
+
+**Setup:** Get your API key from [platform.minimax.io](https://platform.minimax.io). Set `MINIMAX_API_KEY` environment variable or configure in `keys.toml`:
+
+```bash
+export MINIMAX_API_KEY="your-api-key"
+```
+
+MiniMax is an OpenAI-compatible provider with competitive pricing. It does not expose a `/models` endpoint, so the model list comes from `config.toml` (pre-configured with available models).
+
 ### Qwen (via OpenAI-compatible)
 
 **Setup:** Configure via `QWEN_API_KEY` and `QWEN_BASE_URL`.
