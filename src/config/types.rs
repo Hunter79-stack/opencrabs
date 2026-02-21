@@ -333,6 +333,7 @@ pub struct TtsProviders {
 
 /// Individual provider configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ProviderConfig {
     /// Provider enabled
     #[serde(default = "default_enabled")]
@@ -355,17 +356,6 @@ pub struct ProviderConfig {
     pub models: Vec<String>,
 }
 
-impl Default for ProviderConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            api_key: None,
-            base_url: None,
-            default_model: None,
-            models: vec![],
-        }
-    }
-}
 
 fn default_enabled() -> bool {
     true
@@ -437,61 +427,51 @@ fn load_keys_from_file() -> Result<ProviderConfigs> {
 /// Keys from keys.toml override values in config.toml
 fn merge_provider_keys(mut base: ProviderConfigs, keys: ProviderConfigs) -> ProviderConfigs {
     // Merge each provider's api_key if present in keys
-    if let Some(k) = keys.anthropic {
-        if let Some(key) = k.api_key {
-            let entry = base.anthropic.get_or_insert_with(|| ProviderConfig::default());
+    if let Some(k) = keys.anthropic
+        && let Some(key) = k.api_key {
+            let entry = base.anthropic.get_or_insert_with(ProviderConfig::default);
             entry.api_key = Some(key);
         }
-    }
-    if let Some(k) = keys.openai {
-        if let Some(key) = k.api_key {
-            let entry = base.openai.get_or_insert_with(|| ProviderConfig::default());
+    if let Some(k) = keys.openai
+        && let Some(key) = k.api_key {
+            let entry = base.openai.get_or_insert_with(ProviderConfig::default);
             entry.api_key = Some(key);
         }
-    }
-    if let Some(k) = keys.openrouter {
-        if let Some(key) = k.api_key {
-            let entry = base.openrouter.get_or_insert_with(|| ProviderConfig::default());
+    if let Some(k) = keys.openrouter
+        && let Some(key) = k.api_key {
+            let entry = base.openrouter.get_or_insert_with(ProviderConfig::default);
             entry.api_key = Some(key);
         }
-    }
-    if let Some(k) = keys.minimax {
-        if let Some(key) = k.api_key {
-            let entry = base.minimax.get_or_insert_with(|| ProviderConfig::default());
+    if let Some(k) = keys.minimax
+        && let Some(key) = k.api_key {
+            let entry = base.minimax.get_or_insert_with(ProviderConfig::default);
             entry.api_key = Some(key);
         }
-    }
-    if let Some(k) = keys.gemini {
-        if let Some(key) = k.api_key {
-            let entry = base.gemini.get_or_insert_with(|| ProviderConfig::default());
+    if let Some(k) = keys.gemini
+        && let Some(key) = k.api_key {
+            let entry = base.gemini.get_or_insert_with(ProviderConfig::default);
             entry.api_key = Some(key);
         }
-    }
-    if let Some(k) = keys.custom {
-        if let Some(key) = k.api_key {
-            let entry = base.custom.get_or_insert_with(|| ProviderConfig::default());
+    if let Some(k) = keys.custom
+        && let Some(key) = k.api_key {
+            let entry = base.custom.get_or_insert_with(ProviderConfig::default);
             entry.api_key = Some(key);
         }
-    }
     // Also handle STT/TTS keys
-    if let Some(stt) = keys.stt {
-        if let Some(groq) = stt.groq {
-            if let Some(key) = groq.api_key {
+    if let Some(stt) = keys.stt
+        && let Some(groq) = stt.groq
+            && let Some(key) = groq.api_key {
                 let base_stt = base.stt.get_or_insert_with(SttProviders::default);
                 let entry = base_stt.groq.get_or_insert_with(ProviderConfig::default);
                 entry.api_key = Some(key);
             }
-        }
-    }
-    if let Some(tts) = keys.tts {
-        if let Some(openai) = tts.openai {
-            if let Some(key) = openai.api_key {
+    if let Some(tts) = keys.tts
+        && let Some(openai) = tts.openai
+            && let Some(key) = openai.api_key {
                 let base_tts = base.tts.get_or_insert_with(TtsProviders::default);
                 let entry = base_tts.openai.get_or_insert_with(ProviderConfig::default);
                 entry.api_key = Some(key);
             }
-        }
-    }
     base
 }
 

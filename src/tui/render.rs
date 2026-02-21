@@ -344,19 +344,19 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
                 && let Some(ref details) = app.messages[msg_idx].details {
                     for detail_line in details.lines() {
                         // Check for diff lines (+/-) and color accordingly
-                        let (style, line_text): (Style, &str) = if detail_line.starts_with("+ ") {
+                        let (style, line_text): (Style, &str) = if let Some(stripped) = detail_line.strip_prefix("+ ") {
                             (
                                 Style::default()
                                     .fg(Color::Rgb(80, 200, 120))  // Green for additions
                                     .bg(Color::Rgb(20, 30, 20)),   // Dim green bg
-                                &detail_line[2..],
+                                stripped,
                             )
-                        } else if detail_line.starts_with("- ") {
+                        } else if let Some(stripped) = detail_line.strip_prefix("- ") {
                             (
                                 Style::default()
                                     .fg(Color::Rgb(255, 100, 100))  // Red for deletions
                                     .bg(Color::Rgb(30, 20, 20)),    // Dim red bg
-                                &detail_line[2..],
+                                stripped,
                             )
                         } else {
                             (

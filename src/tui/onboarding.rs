@@ -1961,16 +1961,14 @@ Respond with EXACTLY six sections using these delimiters. No extra text before t
         if let Some(ref mut p) = config.providers.custom {
             p.api_key = None;
         }
-        if let Some(ref mut p) = config.providers.stt {
-            if let Some(ref mut groq) = p.groq {
+        if let Some(ref mut p) = config.providers.stt
+            && let Some(ref mut groq) = p.groq {
                 groq.api_key = None;
             }
-        }
-        if let Some(ref mut p) = config.providers.tts {
-            if let Some(ref mut openai) = p.openai {
+        if let Some(ref mut p) = config.providers.tts
+            && let Some(ref mut openai) = p.openai {
                 openai.api_key = None;
             }
-        }
 
         config
             .save(&config_path)
@@ -2294,8 +2292,8 @@ pub async fn fetch_provider_models(provider_index: usize, api_key: Option<&str>)
     // Handle Minimax specially - no /models API, must use config
     if provider_index == 4 {
         // Minimax — NO /models API endpoint, must use config.models
-        if let Ok(config) = crate::config::Config::load() {
-            if let Some(p) = &config.providers.minimax {
+        if let Ok(config) = crate::config::Config::load()
+            && let Some(p) = &config.providers.minimax {
                 if !p.models.is_empty() {
                     return p.models.clone();
                 }
@@ -2304,7 +2302,6 @@ pub async fn fetch_provider_models(provider_index: usize, api_key: Option<&str>)
                     return vec![model.clone()];
                 }
             }
-        }
         // Return hardcoded defaults if no config
         return vec!["MiniMax-M2.5".to_string(), "MiniMax-M2.1".to_string()];
     }
