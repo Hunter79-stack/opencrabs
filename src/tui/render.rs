@@ -80,6 +80,11 @@ pub fn render(f: &mut Frame, app: &mut App) {
         }
         AppMode::Chat => {
             render_chat(f, app, chunks[1]);
+            
+            // Render thinking indicator STICKY at bottom (right above input field)
+            // This ensures users can always see it's responding
+            render_thinking_indicator(f, app, chunks[1]);
+            
             render_input(f, app, chunks[2]);
             // Render slash autocomplete dropdown above the input area
             if app.slash_suggestions_active {
@@ -489,36 +494,6 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
         }
     }
 
-    // Show processing indicator with animated spinner (hide when approval is pending)
-    if app.is_processing && app.streaming_response.is_none() && !has_pending_approval {
-        let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        let frame = spinner_frames[app.animation_frame % spinner_frames.len()];
-
-        let elapsed = app.processing_started_at
-            .map(|t| t.elapsed().as_secs())
-            .unwrap_or(0);
-
-        let timer_str = if elapsed > 0 {
-            format!(" ({}s)", elapsed)
-        } else {
-            String::new()
-        };
-
-        lines.push(Line::from(""));
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("{} ", frame),
-                Style::default()
-                    .fg(Color::Rgb(70, 130, 180))
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!("🦀 OpenCrabs is thinking...{}", timer_str),
-                Style::default().fg(Color::Rgb(184, 134, 11)),
-            ),
-        ]));
-    }
-
     // Render active tool group (live, during processing) — below streaming text
     // so it's always visible at the bottom with auto-scroll
     if let Some(ref group) = app.active_tool_group {
@@ -631,6 +606,58 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
         .scroll(((actual_scroll_offset.min(u16::MAX as usize)) as u16, 0));
 
     f.render_widget(chat, area);
+}
+
+/// Render the thinking indicator STICKY at bottom of chat (above input field)
+/// This ensures users can always see it's responding
+fn render_thinking_indicator(f: &mut Frame, app: &App, chat_area: Rect) {
+    // Only show when processing and no streaming response
+    let has_pending_approval = app.has_pending_approval();
+    if !app.is_processing || app.streaming_response.is_some() || has_pending_approval {
+        return;
+    }
+
+    let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let frame = spinner_frames[app.animation_frame % spinner_frames.len()];
+
+    let elapsed = app.processing_started_at
+        .map(|t| t.elapsed().as_secs())
+        .unwrap_or(0);
+
+    let timer_str = if elapsed > 0 {
+        format!(" ({}s)", elapsed)
+    } else {
+        String::new()
+    };
+
+    // Create the thinking line
+    let thinking_line = Line::from(vec![
+        Span::styled(
+            format!("{} ", frame),
+            Style::default()
+                .fg(Color::Rgb(70, 130, 180))
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("🦀 OpenCrabs is thinking...{}", timer_str),
+            Style::default().fg(Color::Rgb(184, 134, 11)),
+        ),
+    ]);
+
+    // Render at the bottom of the chat area (sticky)
+    // We use a paragraph that's positioned at the bottom of the chat area
+    let para = Paragraph::new(thinking_line)
+        .style(Style::default().bg(Color::Rgb(20, 20, 28)));
+    
+    // Position at bottom of chat area, 1 line from bottom
+    let indicator_area = Rect {
+        x: chat_area.x + 1,
+        y: chat_area.y + chat_area.height.saturating_sub(2),
+        width: chat_area.width.saturating_sub(2),
+        height: 1,
+    };
+    
+    f.render_widget(para, indicator_area);
 }
 
 /// Render the input box

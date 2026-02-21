@@ -578,6 +578,7 @@ pub(crate) async fn cmd_chat(
     tracing::debug!("Launching TUI");
     tui::run(app).await.context("TUI error")?;
 
+    // Print shutdown logo and rolling message
     {
         const BYES: &[&str] = &[
             "🦀 Back to the ocean...",
@@ -596,7 +597,20 @@ pub(crate) async fn cmd_chat(
             .unwrap_or_default()
             .subsec_nanos() as usize)
             % BYES.len();
-        println!("\n{}", BYES[i]);
+        
+        // Print logo
+        let logo_style = "\x1b[38;2;218;165;32m"; // Gold RGB
+        let reset = "\x1b[0m";
+        let logo = r"
+   ___                    ___           _
+  / _ \ _ __  ___ _ _    / __|_ _ __ _| |__  ___
+ | (_) | '_ \/ -_) ' \  | (__| '_/ _` | '_ \(_-<
+  \___/| .__/\___|_||_|  \___|_| \__,_|_.__//__/
+       |_|";
+        println!();
+        println!("{}{}{}", logo_style, logo, reset);
+        println!();
+        println!("{}", BYES[i]);
     }
 
     Ok(())

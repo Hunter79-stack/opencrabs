@@ -1,9 +1,12 @@
+[![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Rust Edition](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org/)
+[![Ratatui](https://img.shields.io/badge/ratatui-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://ratatui.rs)
+[![Docker](https://img.shields.io/badge/docker-%23000000.svg?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 [![CI](https://github.com/adolfousier/opencrabs/actions/workflows/ci.yml/badge.svg)](https://github.com/adolfousier/opencrabs/actions/workflows/ci.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/adolfousier/opencrabs?style=social)](https://github.com/adolfousier/opencrabs)
 
-# OpenCrabs
+# 🦀 OpenCrabs
 
 **Rust-based open-claw inspired orchestration layer for software development.**
 
@@ -21,6 +24,8 @@
 ```
 
 **Author:** [Adolfo Usier](https://github.com/adolfousier)
+
+⭐ Star us on [GitHub](https://github.com/adolfousier/opencrabs) if you like what you see!
 
 ---
 
@@ -1168,6 +1173,14 @@ cargo test
 - **Issues:** [GitHub Issues](https://github.com/adolfousier/opencrabs/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/adolfousier/opencrabs/discussions)
 - **Docs:** [src/docs/](src/docs/)
+
+---
+
+## Star History Chart
+
+[![Star History Chart](https://api.star-history.com/svg?repos=adolfousier/opencrabs&type=date&legend=top-left)](https://www.star-history.com/#adolfousier/opencrabs)
+
+## ✨ Stay Tuned
 
 ---
 

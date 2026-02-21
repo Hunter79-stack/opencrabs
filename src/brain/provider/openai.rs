@@ -263,6 +263,7 @@ impl OpenAIProvider {
             temperature: request.temperature,
             max_tokens: request.max_tokens,
             stream: Some(request.stream),
+            stream_options: None,
             tools,
         }
     }
@@ -342,8 +343,8 @@ impl OpenAIProvider {
             content: content_blocks,
             stop_reason,
             usage: TokenUsage {
-                input_tokens: response.usage.prompt_tokens,
-                output_tokens: response.usage.completion_tokens,
+                input_tokens: response.usage.prompt_tokens.unwrap_or(0),
+                output_tokens: response.usage.completion_tokens.unwrap_or(0),
             },
         }
     }
@@ -489,6 +490,7 @@ impl Provider for OpenAIProvider {
 
         let mut openai_request = self.to_openai_request(request);
         openai_request.stream = Some(true);
+        openai_request.stream_options = Some(StreamOptions { include_usage: true });
         
         let tools_count = openai_request.tools.as_ref().map(|t| t.len()).unwrap_or(0);
         tracing::debug!("OpenAI request has {} tools", tools_count);
@@ -666,6 +668,36 @@ impl Provider for OpenAIProvider {
                                                 }));
                                             }
                                         }
+                                        
+                                        // Extract usage from final chunk (when finish_reason is present)
+                                        // This is sent when stream_options.include_usage = true
+                                        if let Some(ref usage) = chunk.usage {
+                                            let finish_reason_str = chunk.choices.first().and_then(|c| c.finish_reason.as_ref());
+                                            if finish_reason_str.is_some() {
+                                                let input_tokens = usage.prompt_tokens.unwrap_or(0);
+                                                let output_tokens = usage.completion_tokens.unwrap_or(0);
+                                                tracing::info!("[STREAM_USAGE] Final chunk usage: input={}, output={}", input_tokens, output_tokens);
+                                                
+                                                // Convert string stop_reason to StopReason enum
+                                                let stop_reason = finish_reason_str.map(|s| match s.as_str() {
+                                                    "stop" => crate::brain::provider::types::StopReason::EndTurn,
+                                                    "length" => crate::brain::provider::types::StopReason::MaxTokens,
+                                                    "tool_calls" => crate::brain::provider::types::StopReason::ToolUse,
+                                                    _ => crate::brain::provider::types::StopReason::EndTurn,
+                                                });
+                                                
+                                                events.push(Ok(StreamEvent::MessageDelta {
+                                                    delta: crate::brain::provider::types::MessageDelta {
+                                                        stop_reason,
+                                                        stop_sequence: None,
+                                                    },
+                                                    usage: crate::brain::provider::types::TokenUsage {
+                                                        input_tokens,
+                                                        output_tokens,
+                                                    },
+                                                }));
+                                            }
+                                        }
                                     }
                                     Err(e) => {
                                         // GRANULAR LOG: Chunk parsing failure
@@ -813,7 +845,14 @@ struct OpenAIRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     stream: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    stream_options: Option<StreamOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<OpenAITool>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct StreamOptions {
+    include_usage: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -871,8 +910,10 @@ struct OpenAIChoice {
 
 #[derive(Debug, Clone, Deserialize)]
 struct OpenAIUsage {
-    prompt_tokens: u32,
-    completion_tokens: u32,
+    #[serde(rename = "prompt_tokens")]
+    prompt_tokens: Option<u32>,
+    #[serde(rename = "completion_tokens")]
+    completion_tokens: Option<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -881,6 +922,8 @@ struct OpenAIStreamChunk {
     id: String,
     model: Option<String>,
     choices: Vec<OpenAIStreamChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    usage: Option<OpenAIUsage>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

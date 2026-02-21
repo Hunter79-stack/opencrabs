@@ -5,6 +5,22 @@ All notable changes to OpenCrab will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.25] - 2026-02-21
+
+### Added
+- **Token Usage for MiniMax/OpenRouter** — Added `stream_options: {include_usage: true}` to streaming requests; extracts and logs token usage from final chunk
+- **Shutdown Logo** — Shows ASCII logo with rolling goodbye message on terminal when exiting
+
+### Fixed
+- **Duplicate Messages** — Fixed duplicate assistant messages appearing when IntermediateText already added content
+- **Tool Call Flow** — Tool calls now appear as separate messages after assistant text, flowing naturally between steps
+- **Empty Content Rendering** — Fixed assistant messages showing empty during session (was showing correctly after restart)
+- **Thinking Indicator** — Moved "OpenCrabs is thinking..." indicator to sticky position at bottom of chat (above input field), always visible to users
+
+### Changed
+- **Message Ordering** — Queued messages now appear at very bottom of conversation (after all assistant/tool messages), above input field
+- **README** — Added GitHub stars call-to-action
+
 ## [0.2.24] - 2026-02-21
 
 ### Added

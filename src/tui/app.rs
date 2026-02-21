@@ -746,6 +746,9 @@ impl App {
                     text.len(), self.active_tool_group.is_some(), self.streaming_response.is_some());
                 // Reset timer for next thinking phase
                 self.processing_started_at = Some(std::time::Instant::now());
+                
+                // Clear streaming response - text is now going to be a permanent message
+                self.streaming_response = None;
 
                 // Check if there was a queued message that was just processed
                 // If so, add it at the VERY END (after all assistant messages and tool calls)
@@ -769,9 +772,8 @@ impl App {
                     tracing::info!("[TUI] Added queued message at end of conversation");
                 }
 
-                // Add the intermediate text as an assistant message
-                // and attach any active tool_group to it (so tool calls appear inline, not at bottom)
-                let attached_tool_group = self.active_tool_group.take();
+                // Add the intermediate text as a separate assistant message (NOT attached to tool_group)
+                // Tool calls should be their own separate messages, not nested inside assistant text
                 self.messages.push(DisplayMessage {
                     id: Uuid::new_v4(),
                     role: "assistant".to_string(),
@@ -783,9 +785,29 @@ impl App {
                     approve_menu: None,
                     details: None,
                     expanded: false,
-                    tool_group: attached_tool_group, // Attach tool calls to this message
+                    tool_group: None, // Tool calls are separate messages
                     plan_approval: None,
                 });
+
+                // Add tool group as SEPARATE message after the assistant text
+                // This ensures natural flow: assistant text → tool calls
+                if let Some(group) = self.active_tool_group.take() {
+                    let count = group.calls.len();
+                    self.messages.push(DisplayMessage {
+                        id: Uuid::new_v4(),
+                        role: "tool_group".to_string(),
+                        content: format!("{} tool call{}", count, if count == 1 { "" } else { "s" }),
+                        timestamp: chrono::Utc::now(),
+                        token_count: None,
+                        cost: None,
+                        approval: None,
+                        approve_menu: None,
+                        details: None,
+                        expanded: false,
+                        tool_group: Some(group),
+                        plan_approval: None,
+                    });
+                }
 
                 if self.auto_scroll {
                     self.scroll_offset = 0;
@@ -2944,22 +2966,33 @@ impl App {
         // Debug: log response content length
         tracing::debug!("Response complete: content_len={}, output_tokens={}", response.content.len(), response.usage.output_tokens);
 
-        // Add assistant message to UI
-        let assistant_msg = DisplayMessage {
-            id: response.message_id,
-            role: "assistant".to_string(),
-            content: response.content,
-            timestamp: chrono::Utc::now(),
-            token_count: Some(response.usage.output_tokens as i32),
-            cost: Some(response.cost),
-            approval: None,
-            approve_menu: None,
-            details: None,
-            expanded: false,
-            tool_group: None,
-            plan_approval: None,
-        };
-        self.messages.push(assistant_msg);
+        // Check if we already added assistant messages via IntermediateText
+        // If so, don't add duplicate - just finalize tool groups
+        let has_intermediate_messages = self.messages
+            .iter()
+            .rfind(|m| m.role == "assistant")
+            .is_some();
+
+        if has_intermediate_messages {
+            tracing::debug!("Skipping duplicate assistant message - already shown via IntermediateText");
+        } else {
+            // Add assistant message to UI only if not already added
+            let assistant_msg = DisplayMessage {
+                id: response.message_id,
+                role: "assistant".to_string(),
+                content: response.content,
+                timestamp: chrono::Utc::now(),
+                token_count: Some(response.usage.output_tokens as i32),
+                cost: Some(response.cost),
+                approval: None,
+                approve_menu: None,
+                details: None,
+                expanded: false,
+                tool_group: None,
+                plan_approval: None,
+            };
+            self.messages.push(assistant_msg);
+        }
 
         // Update session model if not already set
         if let Some(session) = &mut self.current_session
