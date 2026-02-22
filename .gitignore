@@ -3,7 +3,7 @@
 **/*.rs.bk
 *.pdb
 Cargo.lock
-
+~/
 .opencrabs_*.json
 PLAN.md
 src/plans/

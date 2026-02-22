@@ -33,6 +33,7 @@ pub struct ChannelFactory {
 }
 
 impl ChannelFactory {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         provider: Arc<dyn Provider>,
         service_context: ServiceContext,

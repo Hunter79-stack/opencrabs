@@ -2273,11 +2273,37 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
 
     lines.push(Line::from(""));
 
-    // API Key field (like onboarding)
-    let key_focused = focused_field == 1;
+    let is_custom = provider_idx == 5; // Custom provider index
+
+    // For Custom provider: show Base URL field first (field 1), then API Key (field 2)
+    // For others: show API Key only (field 1)
+    if is_custom {
+        // Base URL field (field 1 for Custom)
+        let base_focused = focused_field == 1;
+        let base_display = if app.model_selector_base_url.is_empty() {
+            "http://localhost:1234/v1".to_string()
+        } else {
+            app.model_selector_base_url.clone()
+        };
+        let cursor = if base_focused { "█" } else { "" };
+        lines.push(Line::from(vec![
+            Span::styled(
+                "  Base URL: ",
+                Style::default().fg(if base_focused { BRAND_BLUE } else { Color::DarkGray }),
+            ),
+            Span::styled(
+                format!("{}{}", base_display, cursor),
+                Style::default().fg(if base_focused { Color::White } else { Color::Green }),
+            ),
+        ]));
+        lines.push(Line::from(""));
+    }
+
+    // API Key field (field 1 for non-Custom, field 2 for Custom)
+    let key_focused = (focused_field == 1 && !is_custom) || (focused_field == 2 && is_custom);
     let key_label = selected_provider.key_label;
     let (masked_key, key_hint) = if app.model_selector_api_key.is_empty() {
-        (format!("enter your {}", key_label.to_lowercase()), " (paste or type)".to_string())
+        (format!("enter your {} (optional)", key_label.to_lowercase()), String::new())
     } else {
         ("*".repeat(app.model_selector_api_key.len().min(30)), String::new())
     };
@@ -2303,8 +2329,8 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
 
     lines.push(Line::from(""));
 
-    // Model selection (like onboarding)
-    let model_focused = focused_field == 2;
+    // Model selection (field 2 for non-Custom, field 3 for Custom)
+    let model_focused = (focused_field == 2 && !is_custom) || (focused_field == 3 && is_custom);
     const MAX_VISIBLE_MODELS: usize = 8;
     
     if model_focused {
@@ -2366,22 +2392,46 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
     lines.push(Line::from(""));
 
     // Help text - show different instructions based on focused field
-    let help_text = match focused_field {
-        0 => vec![
-            ("[↑/↓]", "Select"),
-            ("[Enter]", "Next"),
-            ("[Tab]", "Skip to Model"),
-        ],
-        1 => vec![
-            ("[Type]", "API Key"),
-            ("[Enter]", "Fetch Models"),
-        ],
-        2 => vec![
-            ("[Type]", "Filter"),
-            ("[↑/↓]", "Select"),
-            ("[Enter]", "Confirm"),
-        ],
-        _ => vec![],
+    let help_text = if is_custom {
+        match focused_field {
+            0 => vec![
+                ("[↑/↓]", "Select"),
+                ("[Enter]", "Next"),
+                ("[Tab]", "Skip to Model"),
+            ],
+            1 => vec![
+                ("[Type]", "Base URL"),
+                ("[Enter]", "Next"),
+            ],
+            2 => vec![
+                ("[Type]", "API Key"),
+                ("[Enter]", "Next"),
+            ],
+            3 => vec![
+                ("[Type]", "Filter"),
+                ("[↑/↓]", "Select"),
+                ("[Enter]", "Confirm"),
+            ],
+            _ => vec![],
+        }
+    } else {
+        match focused_field {
+            0 => vec![
+                ("[↑/↓]", "Select"),
+                ("[Enter]", "Next"),
+                ("[Tab]", "Skip to Model"),
+            ],
+            1 => vec![
+                ("[Type]", "API Key"),
+                ("[Enter]", "Fetch Models"),
+            ],
+            2 => vec![
+                ("[Type]", "Filter"),
+                ("[↑/↓]", "Select"),
+                ("[Enter]", "Confirm"),
+            ],
+            _ => vec![],
+        }
     };
 
     let mut help_spans: Vec<Span> = Vec::new();

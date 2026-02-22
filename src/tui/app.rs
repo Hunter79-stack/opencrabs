@@ -3894,8 +3894,12 @@ impl App {
         if keys::is_cancel(&event) {
             self.switch_mode(AppMode::Chat).await?;
         } else if event.code == crossterm::event::KeyCode::Tab {
-            // Tab cycles through fields: provider -> api_key -> model -> provider
-            self.model_selector_focused_field = (self.model_selector_focused_field + 1) % 3;
+            // Tab cycles through fields:
+            // - Normal providers: provider(0) -> api_key(1) -> model(2) -> provider(0)
+            // - Custom provider: provider(0) -> base_url(1) -> api_key(2) -> model(3) -> provider(0)
+            let is_custom = self.model_selector_provider_selected == 5; // Custom provider index
+            let max_field = if is_custom { 4 } else { 3 };
+            self.model_selector_focused_field = (self.model_selector_focused_field + 1) % max_field;
             // If moving to provider, enable provider list; otherwise show model list
             self.model_selector_showing_providers = self.model_selector_focused_field == 0;
         } else if self.model_selector_focused_field == 0 {
@@ -3910,8 +3914,20 @@ impl App {
                 }
                 _ => {}
             }
-        } else if self.model_selector_focused_field == 1 {
-            // API key input (focused)
+        } else if self.model_selector_focused_field == 1 && self.model_selector_provider_selected == 5 {
+            // Base URL input for Custom provider (field 1)
+            match event.code {
+                crossterm::event::KeyCode::Char(c) => {
+                    self.model_selector_base_url.push(c);
+                }
+                crossterm::event::KeyCode::Backspace => {
+                    self.model_selector_base_url.pop();
+                }
+                _ => {}
+            }
+        } else if (self.model_selector_focused_field == 1 && self.model_selector_provider_selected != 5)
+            || (self.model_selector_focused_field == 2 && self.model_selector_provider_selected == 5) {
+            // API key input (field 1 for non-Custom, field 2 for Custom)
             match event.code {
                 crossterm::event::KeyCode::Char(c) => {
                     self.model_selector_api_key.push(c);
@@ -3921,8 +3937,9 @@ impl App {
                 }
                 _ => {}
             }
-        } else if self.model_selector_focused_field == 2 {
-            // Model selection (focused) - handle filter input and scrolling
+        } else if (self.model_selector_focused_field == 2 && self.model_selector_provider_selected != 5)
+            || (self.model_selector_focused_field == 3 && self.model_selector_provider_selected == 5) {
+            // Model selection (field 2 for non-Custom, field 3 for Custom)
             match event.code {
                 crossterm::event::KeyCode::Char(c) => {
                     // Type to filter models
@@ -3972,6 +3989,8 @@ impl App {
 
         // Enter to confirm - move to next field
         if keys::is_enter(&event) {
+            let is_custom = self.model_selector_provider_selected == 5;
+            
             if self.model_selector_focused_field == 0 {
                 // On provider field - save config, DON'T close dialog
                 if let Err(e) = self.save_provider_selection_internal(self.model_selector_provider_selected, false).await {
@@ -3979,8 +3998,12 @@ impl App {
                 } else {
                     self.model_selector_focused_field = 1;
                 }
-            } else if self.model_selector_focused_field == 1 {
-                // On API key field - fetch models from provider, DON'T close dialog
+            } else if self.model_selector_focused_field == 1 && is_custom {
+                // Custom provider: field 1 is base_url, move to field 2 (api_key)
+                self.model_selector_focused_field = 2;
+            } else if (self.model_selector_focused_field == 1 && !is_custom)
+                || (self.model_selector_focused_field == 2 && is_custom) {
+                // On API key field (field 1 for non-Custom, field 2 for Custom)
                 let provider_idx = self.model_selector_provider_selected;
                 let api_key = if self.model_selector_api_key.is_empty() {
                     None
@@ -3992,12 +4015,14 @@ impl App {
                 if let Err(e) = self.save_provider_selection_internal(provider_idx, false).await {
                     self.push_system_message(format!("Error: {}", e));
                 } else {
-                    // Fetch live models from the provider
-                    self.model_selector_models = super::onboarding::fetch_provider_models(provider_idx, api_key.as_deref()).await;
+                    // Fetch live models from the provider (for non-Custom)
+                    if !is_custom {
+                        self.model_selector_models = super::onboarding::fetch_provider_models(provider_idx, api_key.as_deref()).await;
+                    }
                     self.model_selector_selected = 0;
                     
-                    // Move to model selection field
-                    self.model_selector_focused_field = 2;
+                    // Move to model selection field (field 2 for non-Custom, field 3 for Custom)
+                    self.model_selector_focused_field = if is_custom { 3 } else { 2 };
                 }
             } else {
                 // On model field - save and close (this one CAN close)

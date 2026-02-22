@@ -221,6 +221,7 @@ pub enum AuthField {
     ApiKey,
     Model,
     CustomBaseUrl,
+    CustomApiKey,
     CustomModel,
 }
 
@@ -278,6 +279,7 @@ pub struct OnboardingWizard {
     pub selected_model: usize,
     pub auth_field: AuthField,
     pub custom_base_url: String,
+    pub custom_api_key: String,
     pub custom_model: String,
     /// Models fetched live from provider API (overrides static list when non-empty)
     pub fetched_models: Vec<String>,
@@ -375,6 +377,7 @@ impl OnboardingWizard {
             selected_model: 0,
             auth_field: AuthField::Provider,
             custom_base_url: String::new(),
+            custom_api_key: String::new(),
             custom_model: String::new(),
             fetched_models: Vec::new(),
             models_fetching: false,
@@ -956,6 +959,9 @@ impl OnboardingWizard {
             AuthField::CustomBaseUrl => {
                 self.custom_base_url.push_str(text);
             }
+            AuthField::CustomApiKey => {
+                self.custom_api_key.push_str(text);
+            }
             AuthField::CustomModel => {
                 self.custom_model.push_str(text);
             }
@@ -1101,10 +1107,25 @@ impl OnboardingWizard {
                     self.custom_base_url.pop();
                 }
                 KeyCode::Enter | KeyCode::Tab => {
-                    self.auth_field = AuthField::CustomModel;
+                    self.auth_field = AuthField::CustomApiKey;
                 }
                 KeyCode::BackTab => {
                     self.auth_field = AuthField::Provider;
+                }
+                _ => {}
+            },
+            AuthField::CustomApiKey => match event.code {
+                KeyCode::Char(c) => {
+                    self.custom_api_key.push(c);
+                }
+                KeyCode::Backspace => {
+                    self.custom_api_key.pop();
+                }
+                KeyCode::Enter | KeyCode::Tab => {
+                    self.auth_field = AuthField::CustomModel;
+                }
+                KeyCode::BackTab => {
+                    self.auth_field = AuthField::CustomBaseUrl;
                 }
                 _ => {}
             },
@@ -1119,7 +1140,7 @@ impl OnboardingWizard {
                     self.next_step();
                 }
                 KeyCode::BackTab => {
-                    self.auth_field = AuthField::CustomBaseUrl;
+                    self.auth_field = AuthField::CustomApiKey;
                 }
                 KeyCode::Tab => {
                     self.next_step();
