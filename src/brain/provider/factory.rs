@@ -60,15 +60,9 @@ pub fn create_provider(config: &Config) -> Result<Arc<dyn Provider>> {
                 return create_fallback(config, fallback_type);
             }
 
-    // No provider enabled
-    Err(anyhow::anyhow!(
-        "No provider enabled.\n\nAdd a provider to config.toml, e.g.:\n\
-        [providers.minimax]\n\
-        enabled = true\n\
-        api_key = \"your-key\"\n\
-        base_url = \"https://api.minimax.io/v1\"\n\
-        default_model = \"MiniMax-M2.5\""
-    ))
+    // No provider enabled - return placeholder provider so app can start and show onboarding
+    tracing::info!("No provider configured, using placeholder provider");
+    Ok(Arc::new(super::PlaceholderProvider))
 }
 
 /// Create fallback provider

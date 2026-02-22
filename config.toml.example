@@ -17,7 +17,7 @@ path = "~/.opencrabs/opencrabs.db"
 # OpenAI-Compatible Provider (Local LLMs)
 # ========================================
 # Use this for LM Studio, Ollama, LocalAI, etc.
-[providers.openai]
+[providers.custom]
 enabled = true
 base_url = "http://localhost:1234/v1/chat/completions"  # LM Studio default
 # ⭐ IMPORTANT: Set this to match the model name loaded in LM Studio!
@@ -63,15 +63,6 @@ default_model = "qwen2.5-coder-7b-instruct"
 # base_url = "https://api.minimax.io/v1"
 # default_model = "MiniMax-M2.5"
 # models = ["MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-Text-01"]
-
-# ========================================
-# Custom OpenAI-Compatible Provider
-# ========================================
-# For any other OpenAI-compatible API
-# [providers.custom]
-# enabled = true
-# base_url = "https://your-endpoint.com/v1"
-# default_model = "your-model"
 
 # ========================================
 # STT (Speech-to-Text) Providers

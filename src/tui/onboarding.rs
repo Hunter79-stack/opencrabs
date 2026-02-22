@@ -116,9 +116,9 @@ const TEMPLATE_FILES: &[(&str, &str)] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnboardingStep {
     ModeSelect,
+    Workspace,
     ProviderAuth,
     MessagingSetup,
-    Workspace,
     Gateway,
     Channels,
     TelegramSetup,
@@ -136,9 +136,9 @@ impl OnboardingStep {
     pub fn number(&self) -> usize {
         match self {
             Self::ModeSelect => 1,
-            Self::ProviderAuth => 2,
-            Self::MessagingSetup => 3,
-            Self::Workspace => 4,
+            Self::Workspace => 2,
+            Self::ProviderAuth => 3,
+            Self::MessagingSetup => 4,
             Self::Gateway => 5,
             Self::Channels => 6,
             Self::TelegramSetup => 6,  // sub-step of Channels
@@ -161,9 +161,9 @@ impl OnboardingStep {
     pub fn title(&self) -> &'static str {
         match self {
             Self::ModeSelect => "Pick Your Vibe",
+            Self::Workspace => "Home Base",
             Self::ProviderAuth => "Brain Fuel",
             Self::MessagingSetup => "Chat Me Anywhere",
-            Self::Workspace => "Home Base",
             Self::Gateway => "API Gateway",
             Self::Channels => "More Channels",
             Self::TelegramSetup => "Telegram Bot",
@@ -604,6 +604,14 @@ impl OnboardingWizard {
 
         match self.step {
             OnboardingStep::ModeSelect => {
+                self.step = OnboardingStep::Workspace;
+            }
+            OnboardingStep::Workspace => {
+                // Create config files in the workspace directory
+                if let Err(e) = self.ensure_config_files() {
+                    self.error_message = Some(format!("Failed to create config files: {}", e));
+                    return;
+                }
                 self.step = OnboardingStep::ProviderAuth;
                 self.auth_field = AuthField::Provider;
                 self.detect_existing_key();
@@ -646,15 +654,6 @@ impl OnboardingWizard {
                     self.step = OnboardingStep::SlackSetup;
                     self.slack_field = SlackField::BotToken;
                     self.detect_existing_slack_tokens();
-                } else {
-                    self.step = OnboardingStep::Workspace;
-                }
-            }
-            OnboardingStep::Workspace => {
-                if self.mode == WizardMode::QuickStart {
-                    // Skip gateway/channels/voice/daemon, go straight to health check
-                    self.step = OnboardingStep::HealthCheck;
-                    self.start_health_check();
                 } else {
                     self.step = OnboardingStep::Gateway;
                 }
@@ -740,31 +739,18 @@ impl OnboardingWizard {
                 // Can't go back further — return true to signal "cancel wizard"
                 return true;
             }
-            OnboardingStep::ProviderAuth => {
+            OnboardingStep::Workspace => {
                 self.step = OnboardingStep::ModeSelect;
+            }
+            OnboardingStep::ProviderAuth => {
+                self.step = OnboardingStep::Workspace;
             }
             OnboardingStep::MessagingSetup => {
                 self.step = OnboardingStep::ProviderAuth;
                 self.auth_field = AuthField::Provider;
             }
-            OnboardingStep::Workspace => {
-                // Go back to the last setup sub-step shown, or MessagingSetup
-                if self.messaging_slack {
-                    self.step = OnboardingStep::SlackSetup;
-                    self.slack_field = SlackField::BotToken;
-                } else if self.messaging_discord {
-                    self.step = OnboardingStep::DiscordSetup;
-                    self.discord_field = DiscordField::BotToken;
-                } else if self.messaging_telegram {
-                    self.step = OnboardingStep::TelegramSetup;
-                    self.telegram_field = TelegramField::BotToken;
-                } else {
-                    self.step = OnboardingStep::MessagingSetup;
-                    self.messaging_field = MessagingField::Telegram;
-                }
-            }
             OnboardingStep::Gateway => {
-                self.step = OnboardingStep::Workspace;
+                self.step = OnboardingStep::MessagingSetup;
             }
             OnboardingStep::Channels => {
                 self.step = OnboardingStep::Gateway;
@@ -830,6 +816,38 @@ impl OnboardingWizard {
             }
         }
         false
+    }
+
+    /// Ensure config.toml and keys.toml exist in the workspace directory
+    fn ensure_config_files(&mut self) -> Result<(), String> {
+        let workspace_path = std::path::PathBuf::from(&self.workspace_path);
+        
+        // Create workspace directory if it doesn't exist
+        if !workspace_path.exists() {
+            std::fs::create_dir_all(&workspace_path)
+                .map_err(|e| format!("Failed to create workspace directory: {}", e))?;
+        }
+
+        let config_path = workspace_path.join("config.toml");
+        let keys_path = workspace_path.join("keys.toml");
+
+        // Create config.toml if it doesn't exist (copy from embedded example)
+        if !config_path.exists() {
+            let config_content = include_str!("../../config.toml.example");
+            std::fs::write(&config_path, config_content)
+                .map_err(|e| format!("Failed to write config.toml: {}", e))?;
+            tracing::info!("Created config.toml at {:?}", config_path);
+        }
+
+        // Create keys.toml if it doesn't exist (copy from embedded example)
+        if !keys_path.exists() {
+            let keys_content = include_str!("../../keys.toml.example");
+            std::fs::write(&keys_path, keys_content)
+                .map_err(|e| format!("Failed to write keys.toml: {}", e))?;
+            tracing::info!("Created keys.toml at {:?}", keys_path);
+        }
+
+        Ok(())
     }
 
     /// Initialize health check results
@@ -2137,26 +2155,34 @@ pub enum WizardAction {
 /// If any API key env var is set, the user has already configured auth — skip onboarding.
 /// To re-run the wizard, use `opencrabs onboard`, `--onboard` flag, or `/onboard`.
 pub fn is_first_time() -> bool {
-    // Check primary path (~/.opencrabs/config.toml) and legacy XDG path
-    let has_config = crate::config::opencrabs_home()
-        .join("config.toml")
-        .exists()
-        || dirs::config_dir()
-            .map(|d| d.join("opencrabs").join("config.toml").exists())
-            .unwrap_or(false);
-
-    if has_config {
-        return false;
+    tracing::debug!("[is_first_time] checking if first time setup needed...");
+    
+    // Check if config exists
+    let config_path = crate::config::opencrabs_home().join("config.toml");
+    if !config_path.exists() {
+        tracing::debug!("[is_first_time] no config found, need onboarding");
+        return true;
     }
 
-    let has_env_key = std::env::var("ANTHROPIC_MAX_SETUP_TOKEN").is_ok()
-        || std::env::var("ANTHROPIC_API_KEY").is_ok()
-        || std::env::var("OPENAI_API_KEY").is_ok()
-        || std::env::var("GEMINI_API_KEY").is_ok()
-        || std::env::var("DASHSCOPE_API_KEY").is_ok()
-        || std::env::var("OPENROUTER_API_KEY").is_ok();
+    // Config exists - check if any provider is actually enabled
+    let config = match crate::config::Config::load() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::debug!("[is_first_time] failed to load config: {}, need onboarding", e);
+            return true;
+        }
+    };
 
-    !has_env_key
+    let has_enabled_provider = 
+        config.providers.anthropic.as_ref().is_some_and(|p| p.enabled)
+        || config.providers.openai.as_ref().is_some_and(|p| p.enabled)
+        || config.providers.gemini.as_ref().is_some_and(|p| p.enabled)
+        || config.providers.openrouter.as_ref().is_some_and(|p| p.enabled)
+        || config.providers.minimax.as_ref().is_some_and(|p| p.enabled)
+        || config.providers.custom.as_ref().is_some_and(|p| p.enabled);
+    
+    tracing::debug!("[is_first_time] has_enabled_provider={}, result={}", has_enabled_provider, !has_enabled_provider);
+    !has_enabled_provider
 }
 
 /// Install the appropriate daemon service for the current platform

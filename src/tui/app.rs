@@ -1080,13 +1080,15 @@ impl App {
                     && shown_at.elapsed() >= std::time::Duration::from_secs(3) {
                         self.splash_shown_at = None;
                         // Check if onboarding should be shown
-                        if self.force_onboard
-                            || super::onboarding::is_first_time()
-                        {
+                        let is_first = super::onboarding::is_first_time();
+                        tracing::debug!("[Splash] force_onboard={}, is_first_time={}", self.force_onboard, is_first);
+                        if self.force_onboard || is_first {
                             self.force_onboard = false;
+                            tracing::info!("[Splash] Starting onboarding wizard");
                             self.onboarding = Some(OnboardingWizard::new());
                             self.switch_mode(AppMode::Onboarding).await?;
                         } else {
+                            tracing::debug!("[Splash] Skipping onboarding, going to Chat");
                             self.switch_mode(AppMode::Chat).await?;
                         }
                     }
@@ -3794,34 +3796,53 @@ impl App {
 
     /// Open the model selector dialog - load from config and fetch models
     async fn open_model_selector(&mut self) {
+        tracing::debug!("[open_model_selector] Opening model selector");
+        
         // Load config to get enabled provider
         let config = crate::config::Config::load().unwrap_or_default();
         
         // Determine which provider is enabled
         // Indices: 0=Anthropic, 1=OpenAI, 2=Gemini, 3=OpenRouter, 4=Minimax, 5=Custom
         let (provider_idx, api_key) = if config.providers.anthropic.as_ref().is_some_and(|p| p.enabled) {
+            tracing::debug!("[open_model_selector] Anthropic enabled");
             (0, config.providers.anthropic.as_ref().and_then(|p| p.api_key.clone()))
         } else if config.providers.openai.as_ref().is_some_and(|p| p.enabled) {
             if let Some(base_url) = config.providers.openai.as_ref().and_then(|p| p.base_url.as_ref()) {
                 if base_url.contains("openrouter") {
+                    tracing::debug!("[open_model_selector] OpenAI (OpenRouter) enabled");
                     (3, config.providers.openai.as_ref().and_then(|p| p.api_key.clone()))
                 } else if base_url.contains("minimax") {
+                    tracing::debug!("[open_model_selector] OpenAI (MiniMax) enabled");
                     (4, config.providers.openai.as_ref().and_then(|p| p.api_key.clone()))
                 } else {
+                    tracing::debug!("[open_model_selector] OpenAI (Custom) enabled, base_url={}", base_url);
                     (5, config.providers.openai.as_ref().and_then(|p| p.api_key.clone()))
                 }
             } else {
+                tracing::debug!("[open_model_selector] OpenAI enabled");
                 (1, config.providers.openai.as_ref().and_then(|p| p.api_key.clone()))
             }
         } else if config.providers.gemini.as_ref().is_some_and(|p| p.enabled) {
+            tracing::debug!("[open_model_selector] Gemini enabled");
             (2, config.providers.gemini.as_ref().and_then(|p| p.api_key.clone()))
         } else if config.providers.openrouter.as_ref().is_some_and(|p| p.enabled) {
+            tracing::debug!("[open_model_selector] OpenRouter enabled");
             (3, config.providers.openrouter.as_ref().and_then(|p| p.api_key.clone()))
         } else if config.providers.minimax.as_ref().is_some_and(|p| p.enabled) {
+            tracing::debug!("[open_model_selector] MiniMax enabled");
             (4, config.providers.minimax.as_ref().and_then(|p| p.api_key.clone()))
+        } else if config.providers.custom.as_ref().is_some_and(|p| p.enabled) {
+            tracing::debug!("[open_model_selector] Custom provider enabled");
+            if let Some(base_url) = config.providers.custom.as_ref().and_then(|p| p.base_url.clone()) {
+                self.model_selector_base_url = base_url;
+            }
+            (5, config.providers.custom.as_ref().and_then(|p| p.api_key.clone()))
         } else {
+            tracing::debug!("[open_model_selector] No provider enabled, defaulting to Anthropic");
             (0, None) // Default
         };
+        
+        tracing::debug!("[open_model_selector] provider_idx={}, has_api_key={}", provider_idx, api_key.is_some());
         
         self.model_selector_provider_selected = provider_idx;
         
@@ -3831,7 +3852,9 @@ impl App {
         }
         
         // Fetch models from enabled provider using config's API key
+        tracing::debug!("[open_model_selector] Fetching models for provider_idx={}", provider_idx);
         self.model_selector_models = super::onboarding::fetch_provider_models(provider_idx, api_key.as_deref()).await;
+        tracing::debug!("[open_model_selector] Fetched {} models", self.model_selector_models.len());
         
         // Pre-select current model from config
         let current = config.providers.openai.as_ref()
@@ -3840,9 +3863,12 @@ impl App {
             .or_else(|| config.providers.gemini.as_ref().and_then(|p| p.default_model.as_deref()))
             .or_else(|| config.providers.openrouter.as_ref().and_then(|p| p.default_model.as_deref()))
             .or_else(|| config.providers.minimax.as_ref().and_then(|p| p.default_model.as_deref()))
+            .or_else(|| config.providers.custom.as_ref().and_then(|p| p.default_model.as_deref()))
             .unwrap_or("default")
             .to_string();
 
+        tracing::debug!("[open_model_selector] Current model from config: {}", current);
+        
         self.model_selector_selected = self
             .model_selector_models
             .iter()
@@ -3851,7 +3877,6 @@ impl App {
 
         // Reset view state
         self.model_selector_showing_providers = false;
-        self.model_selector_base_url.clear();
         self.model_selector_filter.clear();
         self.model_selector_focused_field = 0;
 

@@ -64,7 +64,9 @@ pub(crate) async fn cmd_chat(
         .context("Failed to run database migrations")?;
 
     // Select provider based on configuration using factory
+    // Returns placeholder provider if none configured, so app can start and show onboarding
     let provider = crate::brain::provider::create_provider(config)?;
+    tracing::info!("Using provider: {}", provider.name());
 
     // Create tool registry
     tracing::debug!("Setting up tool registry");
