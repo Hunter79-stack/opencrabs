@@ -362,6 +362,7 @@ impl Default for OnboardingWizard {
 
 impl OnboardingWizard {
     /// Create a new wizard with default state
+    /// Loads existing config if available to pre-fill settings
     pub fn new() -> Self {
         let default_workspace = dirs::home_dir()
             .unwrap_or_else(|| PathBuf::from("~"))
@@ -370,18 +371,55 @@ impl OnboardingWizard {
         // Pre-load default models from embedded config.toml.example for MiniMax and Custom
         let config_models = Self::load_default_models();
 
+        // Try to load existing config to pre-fill settings
+        let existing_config = crate::config::Config::load().ok();
+        
+        // Detect existing enabled provider
+        let (selected_provider, api_key_input, custom_base_url, custom_api_key, custom_model) = 
+            if let Some(ref config) = existing_config {
+            // Find first enabled provider
+            if config.providers.anthropic.as_ref().is_some_and(|p| p.enabled) {
+                (0, EXISTING_KEY_SENTINEL.to_string(), String::new(), String::new(), String::new())
+            } else if config.providers.openai.as_ref().is_some_and(|p| p.enabled) {
+                (1, EXISTING_KEY_SENTINEL.to_string(), String::new(), String::new(), String::new())
+            } else if config.providers.gemini.as_ref().is_some_and(|p| p.enabled) {
+                (2, EXISTING_KEY_SENTINEL.to_string(), String::new(), String::new(), String::new())
+            } else if config.providers.openrouter.as_ref().is_some_and(|p| p.enabled) {
+                (3, EXISTING_KEY_SENTINEL.to_string(), String::new(), String::new(), String::new())
+            } else if config.providers.minimax.as_ref().is_some_and(|p| p.enabled) {
+                (4, EXISTING_KEY_SENTINEL.to_string(), String::new(), String::new(), String::new())
+            } else if config.providers.custom.as_ref().is_some_and(|p| p.enabled) {
+                let c = config.providers.custom.as_ref().unwrap();
+                let base = c.base_url.clone().unwrap_or_default();
+                let model = c.default_model.clone().unwrap_or_default();
+                (5, String::new(), base, EXISTING_KEY_SENTINEL.to_string(), model)
+            } else {
+                (0, String::new(), String::new(), String::new(), String::new())
+            }
+        } else {
+            (0, String::new(), String::new(), String::new(), String::new())
+        };
+        
+        // Pre-fill gateway settings from existing config
+        let gateway_port = existing_config.as_ref()
+            .map(|c| c.gateway.port.to_string())
+            .unwrap_or_else(|| "18789".to_string());
+        let gateway_bind = existing_config.as_ref()
+            .map(|c| c.gateway.bind.clone())
+            .unwrap_or_else(|| "127.0.0.1".to_string());
+
         Self {
             step: OnboardingStep::ModeSelect,
             mode: WizardMode::QuickStart,
 
-            selected_provider: 0,
-            api_key_input: String::new(),
+            selected_provider,
+            api_key_input,
             api_key_cursor: 0,
             selected_model: 0,
             auth_field: AuthField::Provider,
-            custom_base_url: String::new(),
-            custom_api_key: String::new(),
-            custom_model: String::new(),
+            custom_base_url,
+            custom_api_key,
+            custom_model,
             fetched_models: Vec::new(),
             models_fetching: false,
             config_models,
@@ -395,8 +433,8 @@ impl OnboardingWizard {
             workspace_path: default_workspace.to_string_lossy().to_string(),
             seed_templates: true,
 
-            gateway_port: "18789".to_string(),
-            gateway_bind: "127.0.0.1".to_string(),
+            gateway_port,
+            gateway_bind,
             gateway_auth: 0,
 
             channel_toggles: CHANNEL_NAMES
@@ -671,9 +709,13 @@ impl OnboardingWizard {
                         Some("Base URL and model name are required for custom provider".to_string());
                     return;
                 }
-                // Always show messaging setup (both modes)
-                self.step = OnboardingStep::MessagingSetup;
-                self.messaging_field = MessagingField::Telegram;
+                // QuickStart: skip messaging setup, go straight to gateway
+                if self.mode == WizardMode::QuickStart {
+                    self.step = OnboardingStep::Gateway;
+                } else {
+                    self.step = OnboardingStep::MessagingSetup;
+                    self.messaging_field = MessagingField::Telegram;
+                }
             }
             OnboardingStep::MessagingSetup => {
                 // Sync messaging toggles into channel_toggles for apply_config
@@ -701,7 +743,12 @@ impl OnboardingWizard {
                 }
             }
             OnboardingStep::Gateway => {
-                self.step = OnboardingStep::Channels;
+                // QuickStart: skip channels/voice, go straight to daemon
+                if self.mode == WizardMode::QuickStart {
+                    self.step = OnboardingStep::Daemon;
+                } else {
+                    self.step = OnboardingStep::Channels;
+                }
             }
             OnboardingStep::Channels => {
                 // Chain: Telegram → Discord → Slack → VoiceSetup
@@ -792,7 +839,13 @@ impl OnboardingWizard {
                 self.auth_field = AuthField::Provider;
             }
             OnboardingStep::Gateway => {
-                self.step = OnboardingStep::MessagingSetup;
+                // QuickStart: go back to ProviderAuth, Advanced: go back to MessagingSetup
+                if self.mode == WizardMode::QuickStart {
+                    self.step = OnboardingStep::ProviderAuth;
+                    self.auth_field = AuthField::Provider;
+                } else {
+                    self.step = OnboardingStep::MessagingSetup;
+                }
             }
             OnboardingStep::Channels => {
                 self.step = OnboardingStep::Gateway;
@@ -837,15 +890,16 @@ impl OnboardingWizard {
                 }
             }
             OnboardingStep::Daemon => {
-                self.step = OnboardingStep::VoiceSetup;
-                self.voice_field = VoiceField::GroqApiKey;
+                // QuickStart: go back to Gateway, Advanced: go back to VoiceSetup
+                if self.mode == WizardMode::QuickStart {
+                    self.step = OnboardingStep::Gateway;
+                } else {
+                    self.step = OnboardingStep::VoiceSetup;
+                    self.voice_field = VoiceField::GroqApiKey;
+                }
             }
             OnboardingStep::HealthCheck => {
-                if self.mode == WizardMode::QuickStart {
-                    self.step = OnboardingStep::Workspace;
-                } else {
-                    self.step = OnboardingStep::Daemon;
-                }
+                self.step = OnboardingStep::Daemon;
             }
             OnboardingStep::BrainSetup => {
                 self.step = OnboardingStep::HealthCheck;
