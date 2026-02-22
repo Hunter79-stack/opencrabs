@@ -367,6 +367,9 @@ impl OnboardingWizard {
             .unwrap_or_else(|| PathBuf::from("~"))
             .join(".opencrabs");
 
+        // Pre-load default models from embedded config.toml.example for MiniMax and Custom
+        let config_models = Self::load_default_models();
+
         Self {
             step: OnboardingStep::ModeSelect,
             mode: WizardMode::QuickStart,
@@ -381,7 +384,7 @@ impl OnboardingWizard {
             custom_model: String::new(),
             fetched_models: Vec::new(),
             models_fetching: false,
-            config_models: Vec::new(),
+            config_models,
 
             messaging_field: MessagingField::Telegram,
             messaging_telegram: false,
@@ -568,6 +571,42 @@ impl OnboardingWizard {
     /// Whether the current provider supports live model fetching
     pub fn supports_model_fetch(&self) -> bool {
         matches!(self.selected_provider, 0 | 1 | 3) // Anthropic, OpenAI, OpenRouter
+    }
+
+    /// Load default models from embedded config.toml.example for MiniMax and Custom
+    fn load_default_models() -> Vec<String> {
+        // Parse the embedded config.toml.example to extract default models
+        let config_content = include_str!("../../config.toml.example");
+        let mut models = Vec::new();
+        
+        // Parse MiniMax models
+        if let Ok(config) = config_content.parse::<toml::Value>() {
+            if let Some(providers) = config.get("providers") {
+                if let Some(minimax) = providers.get("minimax") {
+                    if let Some(models_arr) = minimax.get("models").and_then(|m| m.as_array()) {
+                        for model in models_arr {
+                            if let Some(model_str) = model.as_str() {
+                                models.push(model_str.to_string());
+                            }
+                        }
+                    }
+                }
+                if let Some(custom) = providers.get("custom") {
+                    if let Some(models_arr) = custom.get("models").and_then(|m| m.as_array()) {
+                        for model in models_arr {
+                            if let Some(model_str) = model.as_str() {
+                                if !models.contains(&model_str.to_string()) {
+                                    models.push(model_str.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        tracing::debug!("Loaded {} default models from config.toml.example", models.len());
+        models
     }
 
 
@@ -848,6 +887,20 @@ impl OnboardingWizard {
             std::fs::write(&keys_path, keys_content)
                 .map_err(|e| format!("Failed to write keys.toml: {}", e))?;
             tracing::info!("Created keys.toml at {:?}", keys_path);
+        }
+
+        // Load models from the newly created config.toml for MiniMax and Custom providers
+        if let Ok(config) = crate::config::Config::load() {
+            if let Some(p) = &config.providers.minimax {
+                if !p.models.is_empty() {
+                    self.config_models = p.models.clone();
+                }
+            }
+            if let Some(p) = &config.providers.custom {
+                if !p.models.is_empty() {
+                    self.config_models = p.models.clone();
+                }
+            }
         }
 
         Ok(())
@@ -1845,9 +1898,9 @@ Respond with EXACTLY six sections using these delimiters. No extra text before t
             }
             5 => {
                 // Custom OpenAI-compatible
-                config.providers.openai = Some(ProviderConfig {
+                config.providers.custom = Some(ProviderConfig {
                     enabled: true,
-                    api_key: Some(self.api_key_input.clone()),
+                    api_key: Some(self.custom_api_key.clone()),
                     base_url: Some(self.custom_base_url.clone()),
                     default_model: Some(self.custom_model.clone()),
                     models: self.config_models.clone(),
@@ -2015,52 +2068,58 @@ Respond with EXACTLY six sections using these delimiters. No extra text before t
 
         // Save API keys to keys.toml instead of config.toml
         let mut keys = crate::config::ProviderConfigs::default();
-        let api_key = &self.api_key_input;
-        if !api_key.is_empty() && !self.has_existing_key() {
-            match self.selected_provider {
-                0 => {
-                    keys.anthropic = Some(crate::config::ProviderConfig {
-                        enabled: true,
-                        api_key: Some(api_key.clone()),
-                        ..Default::default()
-                    });
+        
+        // Handle Custom provider separately - uses custom_api_key field
+        if self.is_custom_provider() {
+            if !self.custom_api_key.is_empty() && !self.has_existing_key() {
+                keys.custom = Some(crate::config::ProviderConfig {
+                    enabled: true,
+                    api_key: Some(self.custom_api_key.clone()),
+                    ..Default::default()
+                });
+            }
+        } else {
+            // Handle other providers that use api_key_input
+            let api_key = &self.api_key_input;
+            if !api_key.is_empty() && !self.has_existing_key() {
+                match self.selected_provider {
+                    0 => {
+                        keys.anthropic = Some(crate::config::ProviderConfig {
+                            enabled: true,
+                            api_key: Some(api_key.clone()),
+                            ..Default::default()
+                        });
+                    }
+                    1 => {
+                        keys.openai = Some(crate::config::ProviderConfig {
+                            enabled: true,
+                            api_key: Some(api_key.clone()),
+                            ..Default::default()
+                        });
+                    }
+                    2 => {
+                        keys.gemini = Some(crate::config::ProviderConfig {
+                            enabled: true,
+                            api_key: Some(api_key.clone()),
+                            ..Default::default()
+                        });
+                    }
+                    3 => {
+                        keys.openrouter = Some(crate::config::ProviderConfig {
+                            enabled: true,
+                            api_key: Some(api_key.clone()),
+                            ..Default::default()
+                        });
+                    }
+                    4 => {
+                        keys.minimax = Some(crate::config::ProviderConfig {
+                            enabled: true,
+                            api_key: Some(api_key.clone()),
+                            ..Default::default()
+                        });
+                    }
+                    _ => {}
                 }
-                1 => {
-                    keys.openai = Some(crate::config::ProviderConfig {
-                        enabled: true,
-                        api_key: Some(api_key.clone()),
-                        ..Default::default()
-                    });
-                }
-                2 => {
-                    keys.gemini = Some(crate::config::ProviderConfig {
-                        enabled: true,
-                        api_key: Some(api_key.clone()),
-                        ..Default::default()
-                    });
-                }
-                3 => {
-                    keys.openrouter = Some(crate::config::ProviderConfig {
-                        enabled: true,
-                        api_key: Some(api_key.clone()),
-                        ..Default::default()
-                    });
-                }
-                4 => {
-                    keys.minimax = Some(crate::config::ProviderConfig {
-                        enabled: true,
-                        api_key: Some(api_key.clone()),
-                        ..Default::default()
-                    });
-                }
-                5 => {
-                    keys.custom = Some(crate::config::ProviderConfig {
-                        enabled: true,
-                        api_key: Some(api_key.clone()),
-                        ..Default::default()
-                    });
-                }
-                _ => {}
             }
         }
         

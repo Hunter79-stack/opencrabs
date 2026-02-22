@@ -632,19 +632,8 @@ impl Config {
     }
 
     /// Get the system config path: ~/.opencrabs/config.toml
-    ///
-    /// Falls back to legacy `~/.config/opencrabs/config.toml` for migration.
     pub fn system_config_path() -> Option<PathBuf> {
-        let primary = Some(opencrabs_home().join("config.toml"));
-        // Check legacy XDG path for migration
-        let legacy = dirs::config_dir().map(|dir| dir.join("opencrabs").join("config.toml"));
-        if primary.as_ref().is_some_and(|p| p.exists()) {
-            return primary;
-        }
-        if legacy.as_ref().is_some_and(|p| p.exists()) {
-            return legacy;
-        }
-        primary
+        Some(opencrabs_home().join("config.toml"))
     }
 
     /// Get the local config path: ./opencrabs.toml

@@ -14,12 +14,15 @@ path = "~/.opencrabs/opencrabs.db"
 
 [providers]
 # ========================================
-# OpenAI-Compatible Provider (Local LLMs)
+# OpenAI-Compat
+ible Provider (Local LLMs)
 # ========================================
 # Use this for LM Studio, Ollama, LocalAI, etc.
 [providers.custom]
 enabled = true
 base_url = "http://localhost:1234/v1/chat/completions"  # LM Studio default
+models = ["kimi-k2.5", "glm-5", "MiniMax-M2.5", "qwen3-coder", "gpt-oss-120b", "llama-4-70B", "mistral-Large-3", "qwen3-coder-next"]
+
 # ⭐ IMPORTANT: Set this to match the model name loaded in LM Studio!
 # Common examples:
 #   - qwen2.5-coder-7b-instruct
@@ -35,50 +38,50 @@ default_model = "qwen2.5-coder-7b-instruct"
 # ========================================
 # Official OpenAI Provider
 # ========================================
-# [providers.openai]
-# enabled = true
-# default_model = "gpt-4o"  # Optional: override default model
+[providers.openai]
+enabled = false
+default_model = "gpt-4o"  # Optional: override default model
 
 # ========================================
 # Anthropic Provider (Claude)
 # ========================================
-# [providers.anthropic]
-# enabled = true
-# default_model = "claude-sonnet-4-6"  # Optional: override default
+[providers.anthropic]
+enabled = false
+default_model = "claude-sonnet-4-6"  # Optional: override default
 
 # ========================================
 # OpenRouter Provider (100+ models via OpenAI-compatible API)
 # ========================================
-# [providers.openrouter]
-# enabled = true
-# base_url = "https://openrouter.ai/api/v1/chat/completions"
-# default_model = "qwen/qwen3-coder-next"  # Many options at openrouter.ai/models
+[providers.openrouter]
+enabled = false
+base_url = "https://openrouter.ai/api/v1/chat/completions"
+default_model = "qwen/qwen3-coder-next"  # Many options at openrouter.ai/models
 
 # ========================================
 # Minimax Provider (Chinese AI, OpenAI-compatible)
 # ========================================
 # Note: Minimax does NOT have a /models endpoint, so add models manually
-# [providers.minimax]
-# enabled = true
-# base_url = "https://api.minimax.io/v1"
-# default_model = "MiniMax-M2.5"
-# models = ["MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-Text-01"]
+[providers.minimax]
+enabled = false
+base_url = "https://api.minimax.io/v1"
+default_model = "MiniMax-M2.5"
+models = ["MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-Text-01"]
 
 # ========================================
 # STT (Speech-to-Text) Providers
 # ========================================
 # Groq Whisper for transcription
-# [providers.stt.groq]
-# enabled = true
-# default_model = "whisper-large-v3-turbo"
+[providers.stt.groq]
+enabled = false
+default_model = "whisper-large-v3-turbo"
 
 # ========================================
 # TTS (Text-to-Speech) Providers
 # ========================================
 # OpenAI TTS for voice output
-# [providers.tts.openai]
-# enabled = true
-# default_model = "gpt-4o-mini-tts"
+[providers.tts.openai]
+enabled = false
+default_model = "gpt-4o-mini-tts"
 
 # ========================================
 # Agent Behaviour
@@ -106,3 +109,26 @@ tts_model = "gpt-4o-mini-tts" # TTS model
 # 4. Increase context length in LM Studio if you get overflow errors:
 #    - Recommended: 8192 or higher
 #    - Location: LM Studio > Model Settings > Context Length
+
+# ==================================================
+# Channels (Telegram / WhatsApp / Slack / Discord)
+# ==================================================
+[channels.whatsapp]
+enabled = false
+allowed_list = ["user19802389679", "user2890797897"]
+channel_id = ["channel1890779", "channel289792323"]
+
+[channels.discord]
+enabled = false
+allowed_list = ["user19802389679", "user2890797897"]
+channel_id = ["channel1890779", "channel289792323"]
+
+[channels.telegram]
+enabled = false
+allowed_list = ["user19802389679", "user2890797897"]
+channel_id = ["channel1890779", "channel289792323"]
+
+[channels.slack]
+enabled = false
+allowed_list = ["user19802389679", "user2890797897"]
+channel_id = ["channel1890779", "channel289792323"]

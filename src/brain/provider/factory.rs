@@ -44,6 +44,13 @@ pub fn create_provider(config: &Config) -> Result<Arc<dyn Provider>> {
             .ok_or_else(|| anyhow::anyhow!("OpenAI enabled but failed to create"));
     }
 
+    // Try Custom OpenAI-compatible
+    if config.providers.custom.as_ref().is_some_and(|p| p.enabled) {
+        tracing::info!("Using enabled provider: Custom OpenAI-Compatible");
+        return try_create_custom(config)?
+            .ok_or_else(|| anyhow::anyhow!("Custom provider enabled but failed to create"));
+    }
+
     // Try Gemini
     if config.providers.gemini.as_ref().is_some_and(|p| p.enabled) {
         tracing::info!("Using enabled provider: Google Gemini");
@@ -140,6 +147,28 @@ fn try_create_minimax(config: &Config) -> Result<Option<Arc<dyn Provider>>> {
     let provider = configure_openai_compatible(
         OpenAIProvider::with_base_url(api_key.clone(), full_url).with_name("minimax"),
         minimax_config,
+    );
+    Ok(Some(Arc::new(provider)))
+}
+
+/// Try to create Custom OpenAI-compatible provider if configured
+fn try_create_custom(config: &Config) -> Result<Option<Arc<dyn Provider>>> {
+    let custom_config = match &config.providers.custom {
+        Some(cfg) => cfg,
+        None => return Ok(None),
+    };
+
+    let Some(api_key) = &custom_config.api_key else {
+        return Ok(None);
+    };
+
+    let base_url = custom_config.base_url.clone()
+        .unwrap_or_else(|| "http://localhost:1234/v1".to_string());
+
+    tracing::info!("Using Custom OpenAI-compatible at: {}", base_url);
+    let provider = configure_openai_compatible(
+        OpenAIProvider::with_base_url(api_key.clone(), base_url),
+        custom_config,
     );
     Ok(Some(Arc::new(provider)))
 }

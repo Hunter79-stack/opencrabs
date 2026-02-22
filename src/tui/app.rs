@@ -528,18 +528,21 @@ impl App {
     pub async fn rebuild_agent_service(&mut self) -> Result<()> {
         use crate::brain::provider::create_provider;
         
-        // Load config - API keys are stored directly in config.toml
+        // Load config - API keys are stored in keys.toml and merged with config
         let config = crate::config::Config::load()
             .map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
         
-        let openai_model = config.providers.openai.as_ref()
-            .and_then(|p| p.default_model.as_ref())
-            .cloned();
-        let anthropic_model = config.providers.anthropic.as_ref()
-            .and_then(|p| p.default_model.as_ref())
-            .cloned();
-        tracing::debug!("rebuild_agent_service: openai.default_model = {:?}, anthropic.default_model = {:?}", 
-            openai_model, anthropic_model);
+        // Check all providers dynamically - log enabled providers for debugging
+        let enabled_providers: Vec<&str> = vec![
+            config.providers.anthropic.as_ref().filter(|p| p.enabled).map(|_| "anthropic"),
+            config.providers.openai.as_ref().filter(|p| p.enabled).map(|_| "openai"),
+            config.providers.gemini.as_ref().filter(|p| p.enabled).map(|_| "gemini"),
+            config.providers.openrouter.as_ref().filter(|p| p.enabled).map(|_| "openrouter"),
+            config.providers.minimax.as_ref().filter(|p| p.enabled).map(|_| "minimax"),
+            config.providers.custom.as_ref().filter(|p| p.enabled).map(|_| "custom"),
+        ].into_iter().flatten().collect();
+        
+        tracing::debug!("rebuild_agent_service: enabled_providers = {:?}", enabled_providers);
         
         // Create new provider from config
         let provider = create_provider(&config)
@@ -680,6 +683,17 @@ impl App {
                     // Handle paste in onboarding wizard (for API keys, etc.)
                     if let Some(ref mut wizard) = self.onboarding {
                         wizard.handle_paste(&text);
+                        // Trigger model fetch if provider supports it and key was just pasted
+                        if wizard.supports_model_fetch() && !wizard.api_key_input.is_empty() {
+                            let provider_idx = wizard.selected_provider;
+                            let api_key = wizard.api_key_input.clone();
+                            wizard.models_fetching = true;
+                            let sender = self.event_sender();
+                            tokio::spawn(async move {
+                                let models = super::onboarding::fetch_provider_models(provider_idx, Some(&api_key)).await;
+                                let _ = sender.send(TuiEvent::OnboardingModelsFetched(models));
+                            });
+                        }
                     }
                 } else if self.mode == AppMode::ModelSelector && self.model_selector_focused_field == 1 {
                     // Handle paste in model selector API key field
