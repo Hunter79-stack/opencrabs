@@ -528,12 +528,14 @@ impl Provider for OpenAIProvider {
             arguments: String,
         }
 
-        // State persisted across SSE chunks via Arc<Mutex<_>>
+        /// State persisted across SSE chunks via Arc<Mutex<_>>
         struct StreamState {
             emitted_message_start: bool,
             emitted_content_start: bool,
-            seen_delta_content: bool, // true once we've received real content via `delta` field
-            tool_calls: std::collections::HashMap<usize, ToolCallAccum>, // index -> accumulated tool call
+            /// True once we've received real content via `delta` field
+            seen_delta_content: bool,
+            /// Index -> accumulated tool call
+            tool_calls: std::collections::HashMap<usize, ToolCallAccum>,
         }
 
         let state = std::sync::Arc::new(std::sync::Mutex::new(StreamState {

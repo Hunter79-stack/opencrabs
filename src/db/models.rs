@@ -63,8 +63,10 @@ pub struct ToolExecution {
     pub id: Uuid,
     pub message_id: Uuid,
     pub tool_name: String,
-    pub arguments: String,      // JSON
-    pub result: Option<String>, // JSON
+    /// JSON
+    pub arguments: String,
+    /// JSON
+    pub result: Option<String>,
     pub status: String,
     pub approved_at: Option<DateTime<Utc>>,
     pub executed_at: Option<DateTime<Utc>>,
@@ -79,10 +81,14 @@ pub struct Plan {
     pub title: String,
     pub description: String,
     pub context: String,
-    pub risks: String,           // JSON array of strings
-    pub test_strategy: String,   // Testing strategy and approach
-    pub technical_stack: String, // JSON array of strings (technologies, frameworks, tools)
-    pub status: String, // Draft, PendingApproval, Approved, Rejected, InProgress, Completed, Cancelled
+    /// JSON array of strings
+    pub risks: String,
+    /// Testing strategy and approach
+    pub test_strategy: String,
+    /// JSON array of strings (technologies, frameworks, tools)
+    pub technical_stack: String,
+    /// Draft, PendingApproval, Approved, Rejected, InProgress, Completed, Cancelled
+    pub status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub approved_at: Option<DateTime<Utc>>,
@@ -96,11 +102,16 @@ pub struct PlanTask {
     pub task_order: i32,
     pub title: String,
     pub description: String,
-    pub task_type: String, // Research, Edit, Create, Delete, Test, Refactor, Documentation, Configuration, Build, Other
-    pub dependencies: String, // JSON array of task IDs
-    pub complexity: i32,   // 1-5 scale
-    pub acceptance_criteria: String, // JSON array of strings (task completion criteria)
-    pub status: String,    // Pending, InProgress, Completed, Skipped, Failed, Blocked
+    /// Research, Edit, Create, Delete, Test, Refactor, Documentation, Configuration, Build, Other
+    pub task_type: String,
+    /// JSON array of task IDs
+    pub dependencies: String,
+    /// 1-5 scale
+    pub complexity: i32,
+    /// JSON array of strings (task completion criteria)
+    pub acceptance_criteria: String,
+    /// Pending, InProgress, Completed, Skipped, Failed, Blocked
+    pub status: String,
     pub notes: Option<String>,
     pub completed_at: Option<DateTime<Utc>>,
 }
@@ -158,7 +169,7 @@ impl File {
     }
 }
 
-// Manual FromRow implementations to handle type conversions
+/// Manual FromRow implementations to handle type conversions
 impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for Session {
     fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
         use sqlx::Row;

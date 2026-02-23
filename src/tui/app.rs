@@ -99,8 +99,10 @@ pub struct ApprovalData {
     pub response_tx: mpsc::UnboundedSender<ToolApprovalResponse>,
     pub requested_at: std::time::Instant,
     pub state: ApprovalState,
-    pub selected_option: usize,  // 0-2, arrow key navigation
-    pub show_details: bool,      // V key toggle
+    /// 0-2, arrow key navigation
+    pub selected_option: usize,
+    /// V key toggle
+    pub show_details: bool,
 }
 
 /// State for the /approve policy selector menu
@@ -113,7 +115,8 @@ pub enum ApproveMenuState {
 /// Data for the /approve inline menu
 #[derive(Debug, Clone)]
 pub struct ApproveMenu {
-    pub selected_option: usize, // 0-2
+    /// 0-2
+    pub selected_option: usize,
     pub state: ApproveMenuState,
 }
 
@@ -133,8 +136,10 @@ pub struct PlanApprovalData {
     pub task_count: usize,
     pub task_summaries: Vec<String>,
     pub state: PlanApprovalState,
-    pub selected_option: usize, // 0=Approve, 1=Reject, 2=Request Changes, 3=View Plan
-    pub show_details: bool,     // toggle task list
+    /// 0=Approve, 1=Reject, 2=Request Changes, 3=View Plan
+    pub selected_option: usize,
+    /// Toggle task list
+    pub show_details: bool,
 }
 
 /// An image file attached to the input (detected from pasted paths)
@@ -206,12 +211,12 @@ impl From<Message> for DisplayMessage {
 
 /// Main application state
 pub struct App {
-    // Core state
+    /// Core state
     pub current_session: Option<Session>,
     pub messages: Vec<DisplayMessage>,
     pub sessions: Vec<Session>,
 
-    // UI state
+    /// UI state
     pub mode: AppMode,
     pub input_buffer: String,
     /// Cursor position within input_buffer (byte offset, always on a char boundary)
@@ -225,7 +230,7 @@ pub struct App {
     pub selected_session_index: usize,
     pub should_quit: bool,
 
-    // Streaming state
+    /// Streaming state
     pub is_processing: bool,
     pub processing_started_at: Option<std::time::Instant>,
     pub streaming_response: Option<String>,
@@ -235,50 +240,51 @@ pub struct App {
     /// Used in complete_response to avoid double-adding the assistant message.
     intermediate_text_received: bool,
 
-    // Animation state
+    /// Animation state
     pub animation_frame: usize,
 
-    // Splash screen state
+    /// Splash screen state
     splash_shown_at: Option<std::time::Instant>,
 
-    // Escape confirmation state (double-press to clear)
+    /// Escape confirmation state (double-press to clear)
     escape_pending_at: Option<std::time::Instant>,
 
-    // Ctrl+C confirmation state (first clears input, second quits)
+    /// Ctrl+C confirmation state (first clears input, second quits)
     ctrl_c_pending_at: Option<std::time::Instant>,
 
-    // Help/Settings scroll offset
+    /// Help/Settings scroll offset
     pub help_scroll_offset: usize,
 
-    // Model name for display (from provider default)
+    /// Model name for display (from provider default)
     pub default_model_name: String,
 
-    // Approval policy state
+    /// Approval policy state
     pub approval_auto_session: bool,
     pub approval_auto_always: bool,
 
-    // Plan mode state
+    /// Plan mode state
     pub current_plan: Option<PlanDocument>,
     pub plan_scroll_offset: usize,
     pub selected_task_index: Option<usize>,
     pub executing_plan: bool,
 
-    // File picker state
+    /// File picker state
     pub file_picker_files: Vec<std::path::PathBuf>,
     pub file_picker_selected: usize,
     pub file_picker_scroll_offset: usize,
     pub file_picker_current_dir: std::path::PathBuf,
 
-    // Slash autocomplete state
+    /// Slash autocomplete state
     pub slash_suggestions_active: bool,
-    pub slash_filtered: Vec<usize>, // indices into SLASH_COMMANDS
+    /// Indices into SLASH_COMMANDS
+    pub slash_filtered: Vec<usize>,
     pub slash_selected_index: usize,
 
-    // Session rename state
+    /// Session rename state
     pub session_renaming: bool,
     pub session_rename_buffer: String,
 
-    // Model selector state (mirrors onboarding ProviderAuth)
+    /// Model selector state (mirrors onboarding ProviderAuth)
     pub model_selector_models: Vec<String>,
     pub model_selector_selected: usize,
     pub model_selector_showing_providers: bool,
@@ -286,42 +292,45 @@ pub struct App {
     pub model_selector_api_key: String,
     pub model_selector_base_url: String,
     pub model_selector_custom_model: String,
-    pub model_selector_focused_field: usize, // 0=provider, 1=api_key, 2=model
+    /// Focused field: 0=provider, 1=api_key, 2=model
+    pub model_selector_focused_field: usize,
     pub model_selector_filter: String,
 
-    // Input history (arrow up/down to cycle through past messages)
+    /// Input history (arrow up/down to cycle through past messages)
     input_history: Vec<String>,
-    input_history_index: Option<usize>,  // None = not browsing, Some(i) = viewing history[i]
-    input_history_stash: String,         // saves current input when entering history
+    /// None = not browsing, Some(i) = viewing history[i]
+    input_history_index: Option<usize>,
+    /// Saves current input when entering history
+    input_history_stash: String,
 
-    // Working directory
+    /// Working directory
     pub working_directory: std::path::PathBuf,
 
-    // Brain state
+    /// Brain state
     pub brain_path: PathBuf,
     pub user_commands: Vec<UserCommand>,
 
-    // Onboarding wizard state
+    /// Onboarding wizard state
     pub onboarding: Option<OnboardingWizard>,
     pub force_onboard: bool,
 
-    // Cancellation token for aborting in-progress requests
+    /// Cancellation token for aborting in-progress requests
     cancel_token: Option<CancellationToken>,
 
-    // Queued message — shared with agent so it can be injected between tool calls
+    /// Queued message — shared with agent so it can be injected between tool calls
     pub(crate) message_queue: Arc<tokio::sync::Mutex<Option<String>>>,
 
-    // Shared session ID — channels (Telegram, WhatsApp) read this to use the same session
+    /// Shared session ID — channels (Telegram, WhatsApp) read this to use the same session
     shared_session_id: Arc<tokio::sync::Mutex<Option<Uuid>>>,
 
-    // Context window tracking
+    /// Context window tracking
     pub context_max_tokens: u32,
     pub last_input_tokens: Option<u32>,
 
-    // Active tool call group (during processing)
+    /// Active tool call group (during processing)
     pub active_tool_group: Option<ToolCallGroup>,
 
-    // Self-update state
+    /// Self-update state
     pub rebuild_status: Option<String>,
 
     /// Session to resume after restart (set via --session CLI arg)
@@ -331,7 +340,7 @@ pub struct App {
     /// Key: (message_id, content_width). Invalidated on terminal resize.
     pub render_cache: HashMap<(Uuid, u16), Vec<Line<'static>>>,
 
-    // History paging — how many DB messages are hidden above the current view
+    /// History paging — how many DB messages are hidden above the current view
     pub hidden_older_messages: usize,
     pub oldest_displayed_sequence: i32,
     pub display_token_count: usize,
@@ -341,16 +350,16 @@ pub struct App {
     /// Raw password text being typed (never displayed, only dots)
     pub sudo_input: String,
 
-    // Services
+    /// Services
     agent_service: Arc<AgentService>,
     session_service: SessionService,
     message_service: MessageService,
     plan_service: PlanService,
 
-    // Events
+    /// Events
     event_handler: EventHandler,
 
-    // Prompt analyzer
+    /// Prompt analyzer
     prompt_analyzer: PromptAnalyzer,
 }
 

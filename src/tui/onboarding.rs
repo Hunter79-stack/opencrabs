@@ -287,30 +287,31 @@ pub struct OnboardingWizard {
     /// Models from config.toml (used when API fetch not available)
     pub config_models: Vec<String>,
 
-    // Step 4: Workspace
+    /// Step 4: Workspace
     pub workspace_path: String,
     pub seed_templates: bool,
 
-    // Step 4: Gateway
+    /// Step 4: Gateway
     pub gateway_port: String,
     pub gateway_bind: String,
-    pub gateway_auth: usize, // 0=Token, 1=None
+    /// 0=Token, 1=None
+    pub gateway_auth: usize,
 
-    // Step 5: Channels
+    /// Step 5: Channels
     pub channel_toggles: Vec<(String, bool)>,
 
-    // Step 5b: Telegram Setup (shown when Telegram is enabled)
+    /// Step 5b: Telegram Setup (shown when Telegram is enabled)
     pub telegram_field: TelegramField,
     pub telegram_token_input: String,
     pub telegram_user_id_input: String,
 
-    // Discord Setup (shown when Discord is enabled)
+    /// Discord Setup (shown when Discord is enabled)
     pub discord_field: DiscordField,
     pub discord_token_input: String,
     pub discord_channel_id_input: String,
     pub discord_allowed_list_input: String,
 
-    // WhatsApp Setup (shown when WhatsApp is enabled)
+    /// WhatsApp Setup (shown when WhatsApp is enabled)
     pub whatsapp_field: WhatsAppField,
     pub whatsapp_qr_text: Option<String>,
     pub whatsapp_connecting: bool,
@@ -318,30 +319,30 @@ pub struct OnboardingWizard {
     pub whatsapp_error: Option<String>,
     pub whatsapp_phone_input: String,
 
-    // Slack Setup (shown when Slack is enabled)
+    /// Slack Setup (shown when Slack is enabled)
     pub slack_field: SlackField,
     pub slack_bot_token_input: String,
     pub slack_app_token_input: String,
     pub slack_channel_id_input: String,
     pub slack_allowed_list_input: String,
 
-    // Channel test connection status
+    /// Channel test connection status
     pub channel_test_status: ChannelTestStatus,
 
-    // Step 6: Voice Setup
+    /// Step 6: Voice Setup
     pub voice_field: VoiceField,
     pub groq_api_key_input: String,
     pub tts_enabled: bool,
 
-    // Step 7: Daemon
+    /// Step 7: Daemon
     pub install_daemon: bool,
 
-    // Step 7: Health check
+    /// Step 7: Health check
     pub health_results: Vec<(String, HealthStatus)>,
     pub health_running: bool,
     pub health_complete: bool,
 
-    // Step 8: Brain Setup
+    /// Step 8: Brain Setup
     pub brain_field: BrainField,
     pub about_me: String,
     pub about_opencrabs: String,
@@ -358,10 +359,10 @@ pub struct OnboardingWizard {
     pub generated_tools: Option<String>,
     pub generated_memory: Option<String>,
 
-    // Model filter (live search in model list)
+    /// Model filter (live search in model list)
     pub model_filter: String,
 
-    // Navigation
+    /// Navigation
     pub focused_field: usize,
     pub error_message: Option<String>,
 }

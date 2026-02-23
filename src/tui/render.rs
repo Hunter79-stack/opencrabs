@@ -11,7 +11,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap},
     Frame,
 };
 use unicode_width::UnicodeWidthStr;
@@ -269,7 +269,7 @@ fn char_boundary_at_width_from_end(s: &str, target_width: usize) -> usize {
 fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
 
-    let content_width = area.width.saturating_sub(2) as usize; // borders
+    let content_width = area.width.saturating_sub(4) as usize; // borders + padding
 
     // Iterate by index to allow mutable access to render_cache while reading messages
     for msg_idx in 0..app.messages.len() {
@@ -580,7 +580,7 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
 
     // Calculate scroll offset — lines are pre-wrapped so count is accurate
     let total_lines = lines.len();
-    let visible_height = area.height.saturating_sub(2) as usize; // Subtract borders
+    let visible_height = area.height.saturating_sub(3) as usize; // borders + top padding
     let max_scroll = total_lines.saturating_sub(visible_height);
     let actual_scroll_offset = max_scroll.saturating_sub(app.scroll_offset);
 
@@ -595,6 +595,7 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .padding(Padding::new(1, 1, 1, 0))
                 .title(Span::styled(
                     chat_title,
                     Style::default()
@@ -651,9 +652,9 @@ fn render_thinking_indicator(f: &mut Frame, app: &App, chat_area: Rect) {
     
     // Position at bottom of chat area, 1 line from bottom
     let indicator_area = Rect {
-        x: chat_area.x + 1,
-        y: chat_area.y + chat_area.height.saturating_sub(2),
-        width: chat_area.width.saturating_sub(2),
+        x: chat_area.x + 2,
+        y: chat_area.y + chat_area.height.saturating_sub(3),
+        width: chat_area.width.saturating_sub(4),
         height: 1,
     };
     
