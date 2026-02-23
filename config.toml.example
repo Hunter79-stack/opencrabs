@@ -10,7 +10,7 @@
 
 [database]
 # Database file location (stores conversation history)
-path = "~/.opencrabs/opencrabs.db"
+# path = "~/.opencrabs/opencrabs.db"  # Default; only override if needed
 
 [providers]
 # ========================================

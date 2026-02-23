@@ -445,6 +445,17 @@ fn default_db_path() -> PathBuf {
     opencrabs_home().join("opencrabs.db")
 }
 
+/// Expand leading `~` or `~/` in a path to the actual home directory.
+fn expand_tilde(p: &Path) -> PathBuf {
+    if let Ok(rest) = p.strip_prefix("~") {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(rest)
+    } else {
+        p.to_path_buf()
+    }
+}
+
 /// Canonical base directory: `~/.opencrabs/`
 ///
 /// All OpenCrabs data lives here: config, database, history, brain workspace.
@@ -759,6 +770,9 @@ impl Config {
         // 4. Apply environment variable overrides
         config = Self::apply_env_overrides(config)?;
 
+        // Expand tilde in database path (TOML doesn't expand ~)
+        config.database.path = expand_tilde(&config.database.path);
+
         tracing::debug!("Configuration loaded successfully");
         Ok(config)
     }
@@ -785,6 +799,9 @@ impl Config {
 
         // Apply environment variable overrides
         config = Self::apply_env_overrides(config)?;
+
+        // Expand tilde in database path (TOML doesn't expand ~)
+        config.database.path = expand_tilde(&config.database.path);
 
         tracing::debug!("Configuration loaded successfully from custom path");
         Ok(config)

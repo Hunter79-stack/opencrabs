@@ -4364,8 +4364,14 @@ impl App {
                 WizardAction::WhatsAppConnect => {
                     let sender = self.event_sender();
                     tokio::spawn(async move {
-                        match crate::brain::tools::whatsapp_connect::start_whatsapp_pairing().await {
-                            Ok(handle) => {
+                        // Timeout the pairing setup itself (may hang if session DB is locked)
+                        let pairing_result = tokio::time::timeout(
+                            std::time::Duration::from_secs(15),
+                            crate::brain::tools::whatsapp_connect::start_whatsapp_pairing(),
+                        ).await;
+
+                        match pairing_result {
+                            Ok(Ok(handle)) => {
                                 // Forward QR codes to the TUI
                                 let qr_sender = sender.clone();
                                 let mut qr_rx = handle.qr_rx;
@@ -4394,8 +4400,13 @@ impl App {
                                     }
                                 }
                             }
-                            Err(e) => {
+                            Ok(Err(e)) => {
                                 let _ = sender.send(TuiEvent::WhatsAppError(e.to_string()));
+                            }
+                            Err(_) => {
+                                let _ = sender.send(TuiEvent::WhatsAppError(
+                                    "WhatsApp bridge startup timed out. Is another instance running?".into(),
+                                ));
                             }
                         }
                     });
