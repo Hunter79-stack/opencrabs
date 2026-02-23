@@ -179,7 +179,7 @@ impl OnboardingStep {
             Self::VoiceSetup => "Talk to me, literally",
             Self::Daemon => "Keep me running in the background",
             Self::HealthCheck => "Making sure everything's wired up right",
-            Self::BrainSetup => "Tell me about yourself so I actually get you",
+            Self::BrainSetup => "Make me yours, drop some context so I actually get you",
             Self::Complete => "You're all set — let's build something cool",
         }
     }

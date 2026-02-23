@@ -40,12 +40,16 @@ pub fn render_onboarding(f: &mut Frame, wizard: &OnboardingWizard) {
             step.title().to_string(),
             Style::default().fg(BRAND_GOLD).add_modifier(Modifier::BOLD),
         )));
-        lines.push(Line::from(Span::styled(
-            step.subtitle().to_string(),
-            Style::default().fg(Color::DarkGray),
-        )));
+        // Wrap subtitle so it never truncates
+        let subtitle_style = Style::default().fg(Color::DarkGray);
+        for chunk in wrap_text(step.subtitle(), 54) {
+            lines.push(Line::from(Span::styled(chunk, subtitle_style)));
+        }
+        lines.push(Line::from(""));
         lines.push(Line::from(""));
     }
+
+    let header_end = lines.len();
 
     // Step-specific content; ProviderAuth returns a focused-line hint for scrolling
     let focused_line: usize = match step {
@@ -124,11 +128,6 @@ pub fn render_onboarding(f: &mut Frame, wizard: &OnboardingWizard) {
     // These lines AND the footer/empty lines get centered.
     // Step-specific content lines (radio buttons, fields, descriptions) stay
     // left-aligned as a group so they don't drift relative to each other.
-    let header_end: usize = if step != OnboardingStep::Complete {
-        6
-    } else {
-        0
-    };
 
     // Find where the footer starts (the nav line near the bottom).
     // The footer only exists on non-Complete steps: empty separator + nav line + bottom padding.
@@ -1965,7 +1964,7 @@ fn render_brain_setup(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizard)
     )));
 
     let agent_display = if wizard.about_opencrabs.is_empty() && !agent_focused {
-        "  personality, vibe, how it should talk to you".to_string()
+        "  personality, vibe, how I should talk to you".to_string()
     } else {
         let cursor = if agent_focused { "█" } else { "" };
         format!("  {}{}", wizard.about_opencrabs, cursor)
@@ -1986,12 +1985,12 @@ fn render_brain_setup(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizard)
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        "  The more you drop the better it covers your ass".to_string(),
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::ITALIC),
-    )));
+    let italic_style = Style::default()
+        .fg(Color::DarkGray)
+        .add_modifier(Modifier::ITALIC);
+    for chunk in wrap_text("  The more you drop the better I cover your ass", 54) {
+        lines.push(Line::from(Span::styled(chunk, italic_style)));
+    }
 
     // Show loaded hint if brain files exist
     if !wizard.original_about_me.is_empty() || !wizard.original_about_opencrabs.is_empty() {
@@ -2000,10 +1999,10 @@ fn render_brain_setup(lines: &mut Vec<Line<'static>>, wizard: &OnboardingWizard)
             Style::default().fg(ACCENT_GOLD),
         )));
     }
-    lines.push(Line::from(Span::styled(
-        "  Esc to skip · Tab to switch fields · Enter to generate".to_string(),
-        Style::default().fg(Color::DarkGray),
-    )));
+    let hint_style = Style::default().fg(Color::DarkGray);
+    for chunk in wrap_text("  Esc to skip · Tab to switch · Enter to generate", 54) {
+        lines.push(Line::from(Span::styled(chunk, hint_style)));
+    }
 }
 
 /// Wrap a string into chunks of max_width display columns
