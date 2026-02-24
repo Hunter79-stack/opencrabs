@@ -113,8 +113,7 @@ tiktoken-rs = "0.9.1"
 qmd = "0.3"
 llama-cpp-2 = "0.1.134"
 
-# Guava Knowledge DB (read-only access for Bee Colony)
-rusqlite = { version = "0.38", features = ["column_decltype"] }
+
 
 [dev-dependencies]
 rstest = "0.25"

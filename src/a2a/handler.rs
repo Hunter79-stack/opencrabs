@@ -81,7 +81,7 @@ async fn handle_send_message(
                 parts: vec![Part::text(format!(
                     "Task created. Processing: {}",
                     if user_text.len() > 100 {
-                        format!("{}...", &user_text[..100])
+                        format!("{}...", &user_text[..user_text.floor_char_boundary(100)])
                     } else {
                         user_text.clone()
                     }

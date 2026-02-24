@@ -14,7 +14,7 @@ use axum::{
     Router,
 };
 use std::net::SocketAddr;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 /// Shared state for the A2A gateway.
 #[derive(Clone)]
@@ -25,12 +25,21 @@ pub struct A2aState {
 }
 
 /// Build the axum router for the A2A gateway.
-pub fn build_router(state: A2aState) -> Router {
+pub fn build_router(state: A2aState, allowed_origins: &[String]) -> Router {
+    let cors = if allowed_origins.is_empty() {
+        CorsLayer::new()
+    } else {
+        let origins: Vec<_> = allowed_origins.iter()
+            .filter_map(|o| o.parse().ok())
+            .collect();
+        CorsLayer::new().allow_origin(AllowOrigin::list(origins))
+    };
+
     Router::new()
         .route("/.well-known/agent.json", get(get_agent_card))
         .route("/a2a/v1", post(handle_jsonrpc))
         .route("/a2a/health", get(health_check))
-        .layer(CorsLayer::permissive())
+        .layer(cors)
         .with_state(state)
 }
 
@@ -39,6 +48,7 @@ pub struct GatewayParams {
     pub bind: String,
     pub port: u16,
     pub enabled: bool,
+    pub allowed_origins: Option<Vec<String>>,
 }
 
 /// Start the A2A gateway server.
@@ -56,7 +66,7 @@ pub async fn start_server(params: &GatewayParams) -> anyhow::Result<()> {
         port: params.port,
     };
 
-    let app = build_router(state);
+    let app = build_router(state, &params.allowed_origins);
     let addr: SocketAddr = format!("{}:{}", params.bind, params.port)
         .parse()
         .map_err(|e| anyhow::anyhow!("Invalid gateway address: {}", e))?;
@@ -129,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_endpoint() {
-        let app = build_router(test_state());
+        let app = build_router(test_state(), &None);
         let req = Request::builder()
             .uri("/a2a/health")
             .body(Body::empty())
@@ -141,7 +151,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_card_endpoint() {
-        let app = build_router(test_state());
+        let app = build_router(test_state(), &None);
         let req = Request::builder()
             .uri("/.well-known/agent.json")
             .body(Body::empty())
@@ -153,7 +163,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_jsonrpc_send_message() {
-        let app = build_router(test_state());
+        let app = build_router(test_state(), &None);
         let body = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "message/send",
