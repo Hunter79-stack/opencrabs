@@ -10,6 +10,12 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
+/// Directories that are almost never useful to grep through.
+const SKIP_DIRS: &[&str] = &[
+    "target", "node_modules", ".git", "dist", "build", "__pycache__",
+    ".mypy_cache", ".tox", ".eggs", "vendor", ".bundle",
+];
+
 /// Grep search tool
 pub struct GrepTool;
 
@@ -129,7 +135,12 @@ impl Tool for GrepTool {
     }
 
     async fn execute(&self, input: Value, context: &ToolExecutionContext) -> Result<ToolResult> {
-        let input: GrepInput = serde_json::from_value(input)?;
+        let mut input: GrepInput = serde_json::from_value(input)?;
+
+        // Default limit to prevent runaway searches
+        if input.limit.is_none() {
+            input.limit = Some(200);
+        }
 
         // Build regex pattern
         let pattern_str = if input.regex {
@@ -314,9 +325,9 @@ impl GrepTool {
                     self.search_file(&path, regex, input, matches, total_matches)
                         .await?;
                 } else if path.is_dir() {
-                    // Skip hidden directories
+                    // Skip hidden and heavy directories
                     if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                        && name.starts_with('.') {
+                        && (name.starts_with('.') || SKIP_DIRS.contains(&name)) {
                             continue;
                         }
                     self.search_directory(&path, regex, input, matches, total_matches)

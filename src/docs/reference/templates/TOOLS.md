@@ -18,6 +18,29 @@ This ensures `git pull` on the repo never overwrites your work. See AGENTS.md fo
 ### Rust-First Policy
 When building custom tools or adding dependencies, **always prioritize Rust-based crates** over wrappers, FFI bindings, or other-language alternatives. Native Rust = lean, safe, fast.
 
+## Tool Parameter Reference
+
+Use these **exact parameter names** when calling tools:
+
+| Tool | Required Params | Optional Params |
+|------|----------------|-----------------|
+| `ls` | `path` | `recursive` |
+| `glob` | `pattern` | `path` |
+| `grep` | `pattern` | `path`, `regex`, `case_insensitive`, `file_pattern`, `limit`, `context` |
+| `read_file` | `path` | `line_range` |
+| `edit_file` | `path`, `operation` | `old_text`, `new_text`, `line` |
+| `write_file` | `path`, `content` | — |
+| `bash` | `command` | `timeout` |
+| `execute_code` | `language`, `code` | — |
+| `web_search` | `query` | `n` |
+| `http_request` | `method`, `url` | `headers`, `body` |
+| `session_search` | `operation` | `query`, `n`, `session_id` |
+| `task_manager` | `operation` | `title`, `description`, `task_id`, `status` |
+| `plan` | `operation` | `title`, `description`, `task` |
+| `session_context` | `operation` | `key`, `value` |
+
+> **Note:** `grep` and `glob` use `pattern` (not `query`). `bash` uses `command` (not `cmd`). File tools use `path` (not `file` or `file_path`).
+
 ## What Goes Here
 
 Things like:

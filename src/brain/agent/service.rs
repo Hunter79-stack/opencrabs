@@ -825,6 +825,13 @@ impl AgentService {
                             }
                         }
 
+                        // session_search: include operation + query to distinguish calls
+                        "session_search" => {
+                            let op = input.get("operation").and_then(|v| v.as_str()).unwrap_or("");
+                            let query = input.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                            format!("session_search:{}:{}", op, query)
+                        }
+
                         // Other tools: just use name
                         _ => name.to_string(),
                     }
@@ -1468,7 +1475,15 @@ impl AgentService {
                 }
                 StreamEvent::MessageDelta { delta, usage } => {
                     stop_reason = delta.stop_reason;
-                    output_tokens = usage.output_tokens;
+                    // Take the largest values — MiniMax sends two deltas:
+                    // first (0,0), then the real usage. Other providers
+                    // may only send one. Using max() handles both cases.
+                    if usage.input_tokens > input_tokens {
+                        input_tokens = usage.input_tokens;
+                    }
+                    if usage.output_tokens > output_tokens {
+                        output_tokens = usage.output_tokens;
+                    }
                 }
                 StreamEvent::MessageStop => break,
                 StreamEvent::Ping => {}

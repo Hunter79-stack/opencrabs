@@ -30,5 +30,9 @@ async fn main() -> Result<()> {
             }
 
     // Run CLI application
-    cli::run().await
+    let result = cli::run().await;
+
+    // Force exit — spawn_blocking tasks (embedding backfill) may still be running
+    // and would prevent the tokio runtime from shutting down cleanly
+    std::process::exit(if result.is_ok() { 0 } else { 1 });
 }

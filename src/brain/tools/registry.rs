@@ -8,6 +8,55 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Per-tool parameter aliases that LLMs commonly confuse.
+/// Format: (tool_name, wrong_param, correct_param).
+/// Applied before validation so models that send slight variations still work.
+const PARAM_ALIASES: &[(&str, &str, &str)] = &[
+    // grep/glob: LLMs often send "query" instead of "pattern"
+    ("grep", "query", "pattern"),
+    ("glob", "query", "pattern"),
+    // file tools: "file", "file_path", "filepath" → "path"
+    ("read_file", "file", "path"),
+    ("read_file", "file_path", "path"),
+    ("read_file", "filepath", "path"),
+    ("write_file", "file", "path"),
+    ("write_file", "file_path", "path"),
+    ("write_file", "filepath", "path"),
+    ("edit_file", "file", "path"),
+    ("edit_file", "file_path", "path"),
+    ("edit_file", "filepath", "path"),
+    ("doc_parser", "file", "path"),
+    ("doc_parser", "file_path", "path"),
+    // write: "text", "body" → "content"
+    ("write_file", "text", "content"),
+    ("write_file", "body", "content"),
+    // bash: "cmd" → "command"
+    ("bash", "cmd", "command"),
+    // search tools: "pattern" → "query"
+    ("web_search", "pattern", "query"),
+    ("exa_search", "pattern", "query"),
+    ("brave_search", "pattern", "query"),
+    ("memory_search", "pattern", "query"),
+];
+
+/// Normalize tool input by mapping common LLM parameter name mistakes
+/// to the correct parameter name. Only remaps if the correct name is absent.
+fn normalize_tool_input(tool_name: &str, mut input: Value) -> Value {
+    if let Some(obj) = input.as_object_mut() {
+        for &(tool, wrong, correct) in PARAM_ALIASES {
+            if tool == tool_name && !obj.contains_key(correct)
+                && let Some(val) = obj.remove(wrong) {
+                    tracing::debug!(
+                        "Normalized tool param: {}.{} → {}.{}",
+                        tool_name, wrong, tool_name, correct
+                    );
+                    obj.insert(correct.to_string(), val);
+                }
+        }
+    }
+    input
+}
+
 /// Registry of available tools
 pub struct ToolRegistry {
     tools: HashMap<String, Arc<dyn Tool>>,
@@ -65,6 +114,9 @@ impl ToolRegistry {
         let tool = self
             .get(name)
             .ok_or_else(|| ToolError::NotFound(name.to_string()))?;
+
+        // Normalize LLM parameter name mistakes before validation
+        let input = normalize_tool_input(name, input);
 
         // Validate input
         tool.validate_input(&input)?;

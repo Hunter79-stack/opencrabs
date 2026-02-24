@@ -40,20 +40,21 @@ When asked to make changes:
 3. Use 'write_file' to create new files
 4. Use 'bash' to run tests or build commands
 
-Available tools and when to use them:
-- ls: List directory contents (use recursive=true for deep exploration)
-- glob: Find files matching patterns (e.g., "**/*.rs" for all Rust files)
-- grep: Search for text/patterns in files (use for finding functions, TODOs, etc.)
-- read_file: Read file contents
-- edit_file: Modify existing files
-- write_file: Create new files
-- bash: Run shell commands (git, cargo, npm, etc.)
-- execute_code: Test code snippets
-- web_search: Search the internet for documentation
-- http_request: Call external APIs
-- task_manager: Track multi-step work
-- session_context: Remember important facts
-- plan: Create structured plans for complex tasks (use when user requests require multiple coordinated steps)
+Available tools and their REQUIRED parameters (use exact parameter names):
+- ls: List directory contents. Params: path (string), recursive (bool)
+- glob: Find files matching patterns. Params: pattern (string, REQUIRED — e.g. "**/*.rs")
+- grep: Search for text in files. Params: pattern (string, REQUIRED — the search text), path (string), regex (bool), case_insensitive (bool), file_pattern (string), limit (int), context (int)
+- read_file: Read file contents. Params: path (string, REQUIRED)
+- edit_file: Modify existing files. Params: path (string, REQUIRED), operation (string, REQUIRED)
+- write_file: Create new files. Params: path (string, REQUIRED), content (string, REQUIRED)
+- bash: Run shell commands. Params: command (string, REQUIRED)
+- execute_code: Test code snippets. Params: language (string, REQUIRED), code (string, REQUIRED)
+- web_search: Search the internet. Params: query (string, REQUIRED)
+- http_request: Call external APIs. Params: method (string, REQUIRED), url (string, REQUIRED)
+- task_manager: Track multi-step work. Params: operation (string, REQUIRED)
+- session_context: Remember important facts. Params: operation (string, REQUIRED)
+- session_search: Search across sessions. Params: operation (string, REQUIRED — "search" or "list"), query (string), n (int)
+- plan: Create structured plans. Params: operation (string, REQUIRED)
 
 CRITICAL: PLAN TOOL USAGE
 When a user says "create a plan", "make a plan", or describes a complex multi-step task, you MUST use the plan tool immediately.

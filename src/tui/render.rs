@@ -580,7 +580,12 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
 
     // Calculate scroll offset — lines are pre-wrapped so count is accurate
     let total_lines = lines.len();
-    let visible_height = area.height.saturating_sub(3) as usize; // borders + top padding
+    // Reserve 1 extra line when thinking indicator is visible so it doesn't overlap content
+    let thinking_visible = app.is_processing
+        && app.streaming_response.is_none()
+        && !app.has_pending_approval();
+    let reserved = if thinking_visible { 4 } else { 3 }; // borders + top padding + indicator
+    let visible_height = area.height.saturating_sub(reserved) as usize;
     let max_scroll = total_lines.saturating_sub(visible_height);
     let actual_scroll_offset = max_scroll.saturating_sub(app.scroll_offset);
 
@@ -650,10 +655,10 @@ fn render_thinking_indicator(f: &mut Frame, app: &App, chat_area: Rect) {
     let para = Paragraph::new(thinking_line)
         .style(Style::default().bg(Color::Rgb(20, 20, 28)));
     
-    // Position at bottom of chat area, 1 line from bottom
+    // Position at bottom of chat area, just above the bottom border
     let indicator_area = Rect {
         x: chat_area.x + 2,
-        y: chat_area.y + chat_area.height.saturating_sub(3),
+        y: chat_area.y + chat_area.height.saturating_sub(2),
         width: chat_area.width.saturating_sub(4),
         height: 1,
     };

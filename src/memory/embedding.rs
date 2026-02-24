@@ -122,47 +122,36 @@ pub(super) fn backfill_embeddings(store: &Mutex<Store>) {
     let count = needing.len();
     tracing::info!("Backfilling embeddings for {count} documents");
 
-    let items: Vec<(String, Option<String>)> = needing
-        .iter()
-        .map(|(_hash, _path, body)| {
-            let title = Store::extract_title(body);
-            (body.clone(), Some(title))
-        })
-        .collect();
-
-    // Engine lock: batch embed → release
-    let results: Vec<_> = {
-        let mut engine = match engine_mutex.lock() {
-            Ok(e) => e,
-            Err(_) => return,
-        };
-        engine
-            .embed_batch_with_progress(&items, |done, total| {
-                if done % 10 == 0 || done == total {
-                    tracing::debug!("Embedding progress: {done}/{total}");
-                }
-            })
-            .into_iter()
-            .map(|r| r.ok())
-            .collect()
-    };
-
-    // Store lock: insert all embeddings → release
+    // Process one document at a time, releasing the engine lock between each
+    // so other callers (session_search, embed_content) aren't blocked for the
+    // entire batch duration.
     let now = chrono::Local::now()
         .format("%Y-%m-%dT%H:%M:%S")
         .to_string();
     let mut stored = 0usize;
-    if let Ok(s) = store.lock() {
-        for (i, emb) in results.iter().enumerate() {
-            if let Some(emb) = emb {
-                let hash = &needing[i].0;
-                if s.insert_embedding(hash, 0, 0, &emb.embedding, &emb.model, &now)
+
+    for (i, (hash, _path, body)) in needing.iter().enumerate() {
+        tracing::debug!("Embedding progress: {}/{}", i, count);
+
+        let title = Store::extract_title(body);
+
+        // Engine lock: embed single document → release
+        let emb = {
+            let mut engine = match engine_mutex.lock() {
+                Ok(e) => e,
+                Err(_) => return,
+            };
+            engine.embed_document(body, Some(&title)).ok()
+        };
+
+        // Store lock: insert embedding → release
+        if let Some(emb) = emb
+            && let Ok(s) = store.lock()
+                && s.insert_embedding(hash, 0, 0, &emb.embedding, &emb.model, &now)
                     .is_ok()
                 {
                     stored += 1;
                 }
-            }
-        }
     }
 
     tracing::info!("Backfilled {stored}/{count} embeddings");

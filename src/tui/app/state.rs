@@ -1052,7 +1052,16 @@ impl App {
             if let Some(pending_at) = self.ctrl_c_pending_at
                 && pending_at.elapsed() < std::time::Duration::from_secs(3) {
                     // Second Ctrl+C within window — quit
+                    // Cancel any running agent task
+                    if let Some(token) = &self.cancel_token {
+                        token.cancel();
+                    }
                     self.should_quit = true;
+                    // Force exit after 1s in case spawn_blocking tasks are stuck
+                    tokio::spawn(async {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        std::process::exit(0);
+                    });
                     return Ok(());
                 }
             // First Ctrl+C — clear input and show hint

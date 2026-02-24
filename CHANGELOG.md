@@ -5,6 +5,29 @@ All notable changes to OpenCrab will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.29] - 2026-02-24
+
+### Added
+- **Tool Parameter Normalization** — Centralized alias map in tool registry corrects common LLM parameter name mistakes (`query`→`pattern`, `cmd`→`command`, `file`→`path`) before validation. Works across all tools
+- **Brain Tool Reference** — System prompt lists exact required parameter names for each tool
+- **TOOLS.md Parameter Table** — New user template includes tool parameter quick-reference table
+
+### Fixed
+- **Token Counting for OpenAI-Compatible Providers** — `stream_complete` now reads `input_tokens` from `MessageDelta` events. Previously always 0 for MiniMax and other OpenAI-compatible providers, causing incorrect session token totals and context percentage
+- **Session Search UTF-8 Crash** — Fixed panic on multi-byte characters when truncating message content (`floor_char_boundary` instead of raw byte slice)
+- **Session Search Deadlock** — Search uses `try_lock()` on embedding engine mutex with FTS-only fallback when backfill is running
+- **Embedding Backfill Lock Contention** — Processes one document at a time, releasing engine lock between each
+- **Tool Loop False Positive** — `session_search` loop detector signature includes `operation:query` to distinguish calls
+- **Grep Traversal Performance** — Skips `target/`, `node_modules/`, `.git/` and other heavy directories; default limit of 200 matches
+- **Thinking Indicator Overlap** — "OpenCrabs is thinking..." no longer overlaps chat content
+- **App Exit Hang** — `process::exit()` prevents tokio runtime hanging on `spawn_blocking` threads
+- **Ctrl+C Force Exit** — Cancel token + 1-second timeout fallback when tools are stuck
+
+### Changed
+- **App Module Split** — `app.rs` (4,960 lines) split into `state.rs`, `input.rs`, `messaging.rs`, `plan_exec.rs`, `dialogs.rs` with `mod.rs` declarations only
+- **Doc Comments** — Converted `//` to `///` doc comments across codebase
+- **7 Test Fixes** — Fixed `test_create_provider_no_credentials` (PlaceholderProvider) and 6 onboarding tests (config pollution, channel routing)
+
 ## [0.2.28] - 2026-02-23
 
 ### Added
@@ -532,6 +555,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sprint history and "coming soon" filler from README
 - Old "Crusty" branding and attribution
 
+[0.2.29]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.29
 [0.2.28]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.28
 [0.2.27]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.27
 [0.2.26]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.26
