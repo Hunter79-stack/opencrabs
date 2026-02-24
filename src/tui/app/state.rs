@@ -815,25 +815,8 @@ impl App {
                     tracing::info!("[TUI] Added queued message at end of conversation");
                 }
 
-                // Add the intermediate text as a separate assistant message (NOT attached to tool_group)
-                // Tool calls should be their own separate messages, not nested inside assistant text
-                self.messages.push(DisplayMessage {
-                    id: Uuid::new_v4(),
-                    role: "assistant".to_string(),
-                    content: text,
-                    timestamp: chrono::Utc::now(),
-                    token_count: None,
-                    cost: None,
-                    approval: None,
-                    approve_menu: None,
-                    details: None,
-                    expanded: false,
-                    tool_group: None, // Tool calls are separate messages
-                    plan_approval: None,
-                });
-
-                // Add tool group as SEPARATE message after the assistant text
-                // This ensures natural flow: assistant text → tool calls
+                // Flush previous iteration's tool group FIRST, so tools appear
+                // before the next iteration's text (matches DB order).
                 if let Some(group) = self.active_tool_group.take() {
                     let count = group.calls.len();
                     self.messages.push(DisplayMessage {
@@ -851,6 +834,22 @@ impl App {
                         plan_approval: None,
                     });
                 }
+
+                // Then add the new intermediate text as a separate assistant message
+                self.messages.push(DisplayMessage {
+                    id: Uuid::new_v4(),
+                    role: "assistant".to_string(),
+                    content: text,
+                    timestamp: chrono::Utc::now(),
+                    token_count: None,
+                    cost: None,
+                    approval: None,
+                    approve_menu: None,
+                    details: None,
+                    expanded: false,
+                    tool_group: None,
+                    plan_approval: None,
+                });
 
                 if self.auto_scroll {
                     self.scroll_offset = 0;
@@ -1371,6 +1370,15 @@ impl App {
             tool_group: None,
             plan_approval: None,
         });
+        // Auto-collapse all tool groups so the approval dialog is immediately visible
+        if let Some(ref mut group) = self.active_tool_group {
+            group.expanded = false;
+        }
+        for msg in self.messages.iter_mut() {
+            if let Some(ref mut group) = msg.tool_group {
+                group.expanded = false;
+            }
+        }
         self.auto_scroll = true;
         self.scroll_offset = 0;
         tracing::info!("[APPROVAL] Pushed approval message for tool='{}', total messages={}, has_pending={}",

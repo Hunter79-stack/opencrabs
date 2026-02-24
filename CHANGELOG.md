@@ -5,6 +5,16 @@ All notable changes to OpenCrab will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.31] - 2026-02-24
+
+### Fixed
+- **Tool calls stacking into one giant group on reload** — Removed cross-iteration merge logic that collapsed all consecutive tool groups into a single "N tool calls" block, eating intermediate text between iterations. Each iteration's `<!-- tools-v2: -->` marker now produces its own collapsible group, matching live session behavior
+- **Tool group ordering during live streaming** — IntermediateText handler flushed the previous iteration's tool group *after* pushing the new step's text, causing tools to appear below the wrong text. Now flushes tools first, matching DB order
+- **Ctrl+O blocked during approval** — All non-approval keys were eaten when an approval dialog was pending, preventing users from collapsing expanded tool groups to see the approval. Ctrl+O now works during approval
+- **Auto-collapse tool groups on approval** — When an approval request arrives, all tool groups are automatically collapsed so the approval dialog is immediately visible without manual intervention
+- **EXA MCP fallback on empty API key** — Empty string API key (`""`) caused EXA to attempt direct API mode instead of free MCP. Now treats empty keys as absent, correctly falling back to MCP (aaefd3d)
+- **Brave search registered without enabled flag** — `brave_search` tool registered whenever an API key existed, ignoring `enabled = false` in config.toml. Now requires both `enabled = true` and a valid API key
+
 ## [0.2.30] - 2026-02-24
 
 ### Added
@@ -14,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A2A Documentation** — Config example, README section with curl examples, TOOLS.md/SECURITY.md/BOOTSTRAP.md reference templates updated
 
 ### Fixed
+- **Tool calls vanishing from TUI** — Tool call context (the collapsible bullet with tool names and output) disappeared from the chat after the agent responded. Tool group was being attached to a previous assistant message instead of rendered inline before the current response. Now matches the DB reload layout: tool calls appear above the response text, visible in both live and reloaded sessions
+- **Tool loop false positives** — `web_search` and `http_request` calls with different arguments were treated as identical by the loop detector, killing legitimate multi-search flows. Signatures now include query/URL arguments. Thresholds raised (8 default, 4 for modification tools) with a 50-call history window
+- **Tool call groups splitting on session reload** — Each tool-loop iteration wrote a separate DB marker, so "2 tool calls" became two "1 tool call" entries on reload. Fixed in v0.2.31
+- **Brave search registered without enabled flag** — `brave_search` tool was available to the agent even when `enabled = false` in config.toml. Now requires both `enabled = true` and API key
+- **EXA MCP fallback on empty API key** — Empty string API key (`""`) in keys.toml caused EXA to use direct API mode instead of free MCP mode. Now treats empty keys as absent, correctly falling back to MCP
 - **A2A: Removed unused `rusqlite` dependency** — A2A handler no longer pulls in rusqlite; uses existing SQLite infrastructure
 - **A2A: UTF-8 slicing safety** — Fixed potential panic on multi-byte characters in message truncation
 - **A2A: Restrictive CORS by default** — No cross-origin requests allowed unless `allowed_origins` is explicitly configured
@@ -22,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **A2A: Agent card uses tool registry** — Skills reflect actual available tools instead of hardcoded list
 - **A2A: Server wiring** — Proper integration with AppState, config, and tool registry
+- **Web search defaults in README** — Updated to reflect DuckDuckGo + EXA as default (no key needed), Brave as optional
 
 ## [0.2.29] - 2026-02-24
 
@@ -573,6 +589,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sprint history and "coming soon" filler from README
 - Old "Crusty" branding and attribution
 
+[0.2.31]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.31
 [0.2.30]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.30
 [0.2.29]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.29
 [0.2.28]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.28

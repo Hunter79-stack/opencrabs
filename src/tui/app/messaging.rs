@@ -580,29 +580,6 @@ impl App {
             });
         }
 
-        // Merge consecutive tool_group messages into a single group.
-        // Each tool-loop iteration writes its own <!-- tools-v2: --> marker,
-        // but the live TUI groups them into one collapsible block. Match that.
-        let mut merged: Vec<DisplayMessage> = Vec::with_capacity(result.len());
-        for mut msg in result {
-            let should_merge = msg.role == "tool_group"
-                && msg.tool_group.is_some()
-                && merged.last().is_some_and(|p| p.role == "tool_group" && p.tool_group.is_some());
-
-            if should_merge {
-                if let Some(new_group) = msg.tool_group.take() {
-                    let prev = merged.last_mut().expect("checked above");
-                    let prev_group = prev.tool_group.as_mut().expect("checked above");
-                    prev_group.calls.extend(new_group.calls);
-                    let count = prev_group.calls.len();
-                    prev.content = format!("{} tool call{}", count, if count == 1 { "" } else { "s" });
-                }
-            } else {
-                merged.push(msg);
-            }
-        }
-        let mut result = merged;
-
         if result.is_empty() {
             // Content was only tool markers with no text — show a placeholder
             result.push(DisplayMessage {
@@ -909,30 +886,24 @@ impl App {
             tracing::info!("[TUI] Added queued message at response complete");
         }
 
-        // Finalize active tool group by attaching it to the last assistant message
-        // (so tool calls appear inline, not as separate message at bottom)
+        // Finalize active tool group as a standalone message BEFORE the response.
+        // Matches DB reload order from expand_message.
         if let Some(group) = self.active_tool_group.take() {
-            // Try to attach to the last assistant message
-            if let Some(last_msg) = self.messages.iter_mut().rev().find(|m| m.role == "assistant") {
-                last_msg.tool_group = Some(group);
-            } else {
-                // Fallback: add as separate message if no assistant message exists
-                let count = group.calls.len();
-                self.messages.push(DisplayMessage {
-                    id: Uuid::new_v4(),
-                    role: "tool_group".to_string(),
-                    content: format!("{} tool call{}", count, if count == 1 { "" } else { "s" }),
-                    timestamp: chrono::Utc::now(),
-                    token_count: None,
-                    cost: None,
-                    approval: None,
-                    approve_menu: None,
-                    details: None,
-                    expanded: false,
-                    tool_group: Some(group),
-                    plan_approval: None,
-                });
-            }
+            let count = group.calls.len();
+            self.messages.push(DisplayMessage {
+                id: Uuid::new_v4(),
+                role: "tool_group".to_string(),
+                content: format!("{} tool call{}", count, if count == 1 { "" } else { "s" }),
+                timestamp: chrono::Utc::now(),
+                token_count: None,
+                cost: None,
+                approval: None,
+                approve_menu: None,
+                details: None,
+                expanded: false,
+                tool_group: Some(group),
+                plan_approval: None,
+            });
         }
 
         // Reload user commands (agent may have written new ones to commands.json)

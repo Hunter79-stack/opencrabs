@@ -298,6 +298,24 @@ impl App {
                     approval.show_details = !approval.show_details;
                 }
                 return Ok(());
+            } else if event.code == KeyCode::Char('o') && event.modifiers == KeyModifiers::CONTROL {
+                // Allow Ctrl+O during approval so user can collapse tool groups to see the approval
+                let target = if let Some(ref group) = self.active_tool_group {
+                    !group.expanded
+                } else if let Some(msg) = self.messages.iter().rev().find(|m| m.tool_group.is_some()) {
+                    !msg.tool_group.as_ref().expect("checked").expanded
+                } else {
+                    true
+                };
+                if let Some(ref mut group) = self.active_tool_group {
+                    group.expanded = target;
+                }
+                for msg in self.messages.iter_mut() {
+                    if let Some(ref mut group) = msg.tool_group {
+                        group.expanded = target;
+                    }
+                }
+                return Ok(());
             }
             // Other keys ignored while approval pending
             return Ok(());
