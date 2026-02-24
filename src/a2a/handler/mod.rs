@@ -47,7 +47,7 @@ pub async fn dispatch(
             ).await
         }
         "tasks/get" => tasks::handle_get_task(req.id, req.params, store).await,
-        "tasks/cancel" => tasks::handle_cancel_task(req.id, req.params, store, cancel_store).await,
+        "tasks/cancel" => tasks::handle_cancel_task(req.id, req.params, store, cancel_store, &service_context.pool()).await,
         _ => JsonRpcResponse::error(
             req.id,
             error_codes::METHOD_NOT_FOUND,

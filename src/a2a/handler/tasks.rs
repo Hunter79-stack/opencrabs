@@ -1,7 +1,7 @@
 //! Handlers for `tasks/get` and `tasks/cancel` operations.
 
 use super::{CancelStore, TaskStore};
-use crate::a2a::types::*;
+use crate::a2a::{persistence, types::*};
 
 /// Handle `tasks/get` — retrieve a task by ID.
 pub async fn handle_get_task(
@@ -41,6 +41,7 @@ pub async fn handle_cancel_task(
     params: serde_json::Value,
     store: TaskStore,
     cancel_store: CancelStore,
+    pool: &sqlx::SqlitePool,
 ) -> JsonRpcResponse {
     let cancel_params: CancelTaskParams = match serde_json::from_value(params) {
         Ok(p) => p,
@@ -76,6 +77,7 @@ pub async fn handle_cancel_task(
                 _ => {
                     task.status.state = TaskState::Canceled;
                     task.status.timestamp = Some(chrono::Utc::now().to_rfc3339());
+                    persistence::upsert_task(pool, task).await;
                     tracing::info!("A2A: Canceled task {}", cancel_params.id);
                     let task_json = serde_json::to_value(&*task)
                         .unwrap_or_else(|_| serde_json::json!({"error": "serialize"}));
@@ -98,13 +100,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_cancel_task_not_found() {
+        use crate::a2a::test_helpers::helpers;
         let store = new_task_store();
         let cancel_store = new_cancel_store();
+        let ctx = helpers::placeholder_service_context().await;
         let resp = handle_cancel_task(
             serde_json::json!(1),
             serde_json::json!({"id": "nonexistent"}),
             store,
             cancel_store,
+            &ctx.pool(),
         )
         .await;
         assert!(resp.error.is_some());

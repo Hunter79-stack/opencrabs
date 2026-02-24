@@ -1,7 +1,7 @@
 //! Handler for `message/send` — creates a task and processes it via AgentService.
 
 use super::{CancelStore, TaskStore};
-use crate::a2a::types::*;
+use crate::a2a::{persistence, types::*};
 use crate::brain::agent::service::AgentService;
 use crate::services::ServiceContext;
 use crate::services::SessionService;
@@ -83,6 +83,7 @@ pub async fn handle_send_message(
         let mut tasks = store.write().await;
         tasks.insert(task_id.clone(), task.clone());
     }
+    persistence::upsert_task(&service_context.pool(), &task).await;
 
     // Determine skill and read-only mode from configuration metadata
     let read_only = send_params
@@ -99,6 +100,7 @@ pub async fn handle_send_message(
     let bg_cancel_store = cancel_store.clone();
     let bg_task_id = task_id.clone();
     let bg_context_id = context_id.clone();
+    let bg_pool = service_context.pool();
     tokio::spawn(async move {
         process_task(
             bg_store,
@@ -109,6 +111,7 @@ pub async fn handle_send_message(
             agent_service,
             service_context,
             read_only,
+            bg_pool,
         )
         .await;
     });
@@ -129,6 +132,7 @@ async fn process_task(
     agent_service: Arc<AgentService>,
     service_context: ServiceContext,
     read_only: bool,
+    pool: sqlx::SqlitePool,
 ) {
     let session_service = SessionService::new(service_context);
     let title = format!(
@@ -139,7 +143,7 @@ async fn process_task(
         Ok(session) => session.id,
         Err(e) => {
             tracing::error!("A2A: Failed to create session for task {}: {}", task_id, e);
-            update_task_failed(&store, &task_id, &context_id, &format!("Session creation failed: {}", e)).await;
+            update_task_failed(&store, &task_id, &context_id, &format!("Session creation failed: {}", e), &pool).await;
             return;
         }
     };
@@ -190,6 +194,9 @@ async fn process_task(
                     metadata: None,
                 });
             }
+            if let Some(task) = tasks.get(&task_id) {
+                persistence::upsert_task(&pool, task).await;
+            }
             tracing::info!(
                 "A2A: Task {} completed ({} tokens used)",
                 task_id,
@@ -198,13 +205,13 @@ async fn process_task(
         }
         Err(e) => {
             tracing::error!("A2A: Task {} failed: {}", task_id, e);
-            update_task_failed(&store, &task_id, &context_id, &e.to_string()).await;
+            update_task_failed(&store, &task_id, &context_id, &e.to_string(), &pool).await;
         }
     }
 }
 
-/// Mark a task as failed in the store.
-async fn update_task_failed(store: &TaskStore, task_id: &str, context_id: &str, error_msg: &str) {
+/// Mark a task as failed in the store and persist to DB.
+async fn update_task_failed(store: &TaskStore, task_id: &str, context_id: &str, error_msg: &str, pool: &sqlx::SqlitePool) {
     let mut tasks = store.write().await;
     if let Some(task) = tasks.get_mut(task_id) {
         task.status = TaskStatus {
@@ -219,5 +226,6 @@ async fn update_task_failed(store: &TaskStore, task_id: &str, context_id: &str, 
             }),
             timestamp: Some(chrono::Utc::now().to_rfc3339()),
         };
+        persistence::upsert_task(pool, task).await;
     }
 }

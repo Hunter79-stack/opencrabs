@@ -5,6 +5,12 @@ All notable changes to OpenCrab will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.32] - 2026-02-24
+
+### Added
+- **A2A Bearer token authentication** -- JSON-RPC endpoint (`/a2a/v1`) now supports `Authorization: Bearer <key>` when `api_key` is configured. Agent card and health endpoints remain public for discovery. Key can be set in `config.toml` or `keys.toml` under `[a2a]`
+- **A2A task persistence** -- Tasks are persisted to SQLite (`a2a_tasks` table, auto-migration) on create, complete, fail, and cancel. Active tasks are restored from DB on server startup so in-flight work survives restarts
+
 ## [0.2.31] - 2026-02-24
 
 ### Fixed
@@ -589,6 +595,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sprint history and "coming soon" filler from README
 - Old "Crusty" branding and attribution
 
+[0.2.32]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.32
 [0.2.31]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.31
 [0.2.30]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.30
 [0.2.29]: https://github.com/adolfousier/opencrabs/releases/tag/v0.2.29

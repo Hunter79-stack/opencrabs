@@ -101,6 +101,12 @@ pub struct A2aConfig {
     /// Allowed CORS origins — must be set explicitly, no cross-origin requests allowed by default
     #[serde(default)]
     pub allowed_origins: Vec<String>,
+
+    /// Optional API key for authenticating incoming A2A requests (Bearer token).
+    /// If set, all JSON-RPC requests must include `Authorization: Bearer <key>`.
+    /// If unset, no authentication is required (suitable for loopback-only use).
+    #[serde(default)]
+    pub api_key: Option<String>,
 }
 
 fn default_a2a_bind() -> String {
@@ -129,6 +135,7 @@ impl Default for A2aConfig {
             bind: default_a2a_bind(),
             port: default_a2a_port(),
             allowed_origins: vec![],
+            api_key: None,
         }
     }
 }
@@ -619,6 +626,14 @@ pub struct KeysFile {
     pub providers: ProviderConfigs,
     #[serde(default)]
     pub channels: ChannelsConfig,
+    #[serde(default)]
+    pub a2a: Option<KeysA2a>,
+}
+
+/// A2A keys section in keys.toml
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct KeysA2a {
+    pub api_key: Option<String>,
 }
 
 /// Load API keys from keys.toml
@@ -818,6 +833,12 @@ impl Config {
         if let Ok(keys) = load_keys_from_file() {
             config.providers = merge_provider_keys(config.providers, keys.providers);
             config.channels = merge_channel_keys(config.channels, keys.channels);
+            // Merge A2A API key from keys.toml
+            if let Some(a2a_keys) = keys.a2a
+                && let Some(key) = a2a_keys.api_key
+                && !key.is_empty() {
+                    config.a2a.api_key = Some(key);
+            }
         }
 
         // 4. Apply environment variable overrides

@@ -12,7 +12,8 @@ use crate::services::ServiceContext;
 use axum::{
     extract::State,
     http::StatusCode,
-    response::Json,
+    middleware,
+    response::{IntoResponse, Json},
     routing::{get, post},
     Router,
 };
@@ -29,6 +30,37 @@ pub struct A2aState {
     pub port: u16,
     pub agent_service: Arc<AgentService>,
     pub service_context: ServiceContext,
+    pub api_key: Option<String>,
+}
+
+/// Bearer token auth middleware. Skipped when no api_key is configured.
+async fn require_bearer(
+    State(state): State<A2aState>,
+    req: axum::http::Request<axum::body::Body>,
+    next: middleware::Next,
+) -> axum::response::Response {
+    let Some(ref expected) = state.api_key else {
+        // No key configured, allow all requests
+        return next.run(req).await;
+    };
+
+    let authorized = req
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .is_some_and(|token| token == expected);
+
+    if authorized {
+        next.run(req).await
+    } else {
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": { "code": -32001, "message": "Unauthorized: invalid or missing Bearer token" },
+            "id": null
+        });
+        (StatusCode::UNAUTHORIZED, Json(body)).into_response()
+    }
 }
 
 /// Build the axum router for the A2A gateway.
@@ -43,10 +75,16 @@ pub fn build_router(state: A2aState, allowed_origins: &[String]) -> Router {
         CorsLayer::new().allow_origin(AllowOrigin::list(origins))
     };
 
+    // Auth-protected JSON-RPC endpoint
+    let protected = Router::new()
+        .route("/a2a/v1", post(handle_jsonrpc))
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_bearer));
+
+    // Public endpoints (discovery + health)
     Router::new()
         .route("/.well-known/agent.json", get(get_agent_card))
-        .route("/a2a/v1", post(handle_jsonrpc))
         .route("/a2a/health", get(health_check))
+        .merge(protected)
         .layer(cors)
         .with_state(state)
 }
@@ -64,13 +102,25 @@ pub async fn start_server(
         return Ok(());
     }
 
+    // Restore any in-flight tasks from the database
+    let task_store = handler::new_task_store();
+    let persisted = super::persistence::load_active_tasks(&service_context.pool()).await;
+    if !persisted.is_empty() {
+        let mut store = task_store.write().await;
+        for task in persisted {
+            tracing::info!("A2A: Restored task {} (state: {:?})", task.id, task.status.state);
+            store.insert(task.id.clone(), task);
+        }
+    }
+
     let state = A2aState {
-        task_store: handler::new_task_store(),
+        task_store,
         cancel_store: handler::new_cancel_store(),
         host: config.bind.clone(),
         port: config.port,
         agent_service,
         service_context,
+        api_key: config.api_key.clone(),
     };
 
     let app = build_router(state, &config.allowed_origins);
@@ -116,7 +166,7 @@ async fn handle_jsonrpc(
         state.task_store,
         state.cancel_store,
         state.agent_service,
-        state.service_context,
+        state.service_context.clone(),
     )
     .await;
     (StatusCode::OK, Json(response))
@@ -149,6 +199,7 @@ mod tests {
             port: 18790,
             agent_service: helpers::placeholder_agent_service().await,
             service_context: helpers::placeholder_service_context().await,
+            api_key: None,
         }
     }
 

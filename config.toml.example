@@ -145,6 +145,9 @@ bind = "127.0.0.1"     # Loopback only by default for security
 port = 18790            # A2A gateway port
 # CORS allowed origins (empty = no cross-origin requests allowed)
 # allowed_origins = ["http://localhost:3000"]
+# API key for Bearer token auth on /a2a/v1 (optional, recommended for non-loopback)
+# Can also be set in keys.toml under [a2a] api_key = "..."
+# api_key = "your-secret-key"
 
 # ========================================
 # Web Search Providers (default to free Duck Duck Go, no need additional web search provider)

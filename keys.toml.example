@@ -80,6 +80,16 @@ app_token = ""
 token = ""
 
 # ========================================
+# A2A (Agent-to-Agent) Gateway
+# ========================================
+
+[a2a]
+# Bearer token for authenticating incoming A2A requests
+# Callers must send: Authorization: Bearer <api_key>
+# Leave empty for no auth (fine for loopback-only use)
+api_key = ""
+
+# ========================================
 # Web Search API Keys
 # ========================================
 
