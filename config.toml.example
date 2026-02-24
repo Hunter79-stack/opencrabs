@@ -152,7 +152,11 @@ port = 18790            # A2A gateway port
 
 [providers.web_search.exa]
 enabled = true
-# Its free up to 1000 requests. API key goes in keys.toml: [providers.web_search.exa] api_key = "..."
+# MCP is enabled by default as its free. If want through API its free up to 1000 requests. API key goes in keys.toml: [providers.web_search.exa] api_key = "..."
+
+[providers.web_search.duckduckgo]
+enabled = true
+# Completely free, enabled by default"
 
 [providers.web_search.brave]
 enabled = false

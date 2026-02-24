@@ -32,7 +32,7 @@ impl ExaSearchTool {
     }
 
     fn use_mcp(&self) -> bool {
-        self.api_key.is_none()
+        self.api_key.as_ref().is_none_or(|k| k.is_empty())
     }
 
     /// Initialize an MCP session and return the session ID.

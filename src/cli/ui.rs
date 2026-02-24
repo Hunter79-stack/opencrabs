@@ -100,14 +100,15 @@ pub(crate) async fn cmd_chat(
     // EXA search: always available (free via MCP), uses direct API if key is set
     let exa_key = config.providers.web_search.as_ref()
         .and_then(|ws| ws.exa.as_ref())
-        .and_then(|p| p.api_key.clone());
+        .and_then(|p| p.api_key.clone())
+        .filter(|k| !k.is_empty());
     let exa_mode = if exa_key.is_some() { "direct API" } else { "MCP (free)" };
     tool_registry.register(Arc::new(ExaSearchTool::new(exa_key)));
     tracing::info!("Registered EXA search tool (mode: {})", exa_mode);
-    // Brave search: requires API key
-    if let Some(brave_key) = config.providers.web_search.as_ref()
-        .and_then(|ws| ws.brave.as_ref())
-        .and_then(|p| p.api_key.clone())
+    // Brave search: requires enabled = true in config.toml AND API key in keys.toml
+    if let Some(brave_cfg) = config.providers.web_search.as_ref().and_then(|ws| ws.brave.as_ref())
+        && brave_cfg.enabled
+        && let Some(brave_key) = brave_cfg.api_key.clone()
     {
         tool_registry.register(Arc::new(BraveSearchTool::new(brave_key)));
         tracing::info!("Registered Brave search tool");

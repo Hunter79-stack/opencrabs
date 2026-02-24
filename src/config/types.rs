@@ -691,12 +691,14 @@ fn merge_provider_keys(mut base: ProviderConfigs, keys: ProviderConfigs) -> Prov
     if let Some(ws) = keys.web_search {
         let base_ws = base.web_search.get_or_insert_with(WebSearchProviders::default);
         if let Some(exa) = ws.exa
-            && let Some(key) = exa.api_key {
+            && let Some(key) = exa.api_key
+            && !key.is_empty() {
                 let entry = base_ws.exa.get_or_insert_with(ProviderConfig::default);
                 entry.api_key = Some(key);
             }
         if let Some(brave) = ws.brave
-            && let Some(key) = brave.api_key {
+            && let Some(key) = brave.api_key
+            && !key.is_empty() {
                 let entry = base_ws.brave.get_or_insert_with(ProviderConfig::default);
                 entry.api_key = Some(key);
             }
