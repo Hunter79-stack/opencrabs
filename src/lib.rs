@@ -39,7 +39,6 @@ pub mod utils;
 
 pub mod channels;
 pub mod a2a;
-pub mod pricing;
 
 // Re-export commonly used types
 pub use error::{OpenCrabsError, ErrorCode};
@@ -48,3 +47,4 @@ pub use error::{OpenCrabsError, ErrorCode};
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 pub const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
+pub mod pricing;
