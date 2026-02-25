@@ -52,6 +52,8 @@ pub enum ProgressEvent {
     CompactionSummary { summary: String },
     /// Build completed — TUI should offer restart
     RestartReady { status: String },
+    /// Real-time token count update — fire after every API response and tool execution
+    TokenCount(usize),
 //    /// A queued user message was injected into the agent context between tool iterations
 //    QueuedMessageInjected { content: String },
 }
@@ -455,25 +457,26 @@ impl AgentService {
                 tool_overhead,
             );
             match self.compact_context(&mut context, &model_name).await {
-                Ok(_) => {
+                Ok(summary) => {
+                    // Stream the summary to chat so user can see it
+                    if let Some(ref cb) = self.progress_callback {
+                        cb(ProgressEvent::CompactionSummary { summary });
+                    }
                     let continuation = Message::user(
-                        "[SYSTEM: Context was auto-compacted before starting. The summary above \
-                         has full context. Acknowledge compaction briefly with a fun/cheeky remark \
-                         (be creative, surprise the user — cursing allowed), then continue the task. \
-                         Do NOT repeat completed work.]"
+                        "[SYSTEM: Context was auto-compacted. The summary above has full context. \
+                         Continue the task immediately using tools. Do NOT repeat completed work. \
+                         Do NOT ask for instructions.]"
                         .to_string()
                     );
                     context.add_message(continuation);
                 }
                 Err(e) => {
                     tracing::error!("Pre-loop compaction failed: {}", e);
-                    // Report to user via progress callback
                     if let Some(ref cb) = self.progress_callback {
                         cb(ProgressEvent::IntermediateText {
                             text: format!("Context compaction failed: {}. Continuing with current context.", e),
                         });
                     }
-                    // Don't abort — try to continue, the API call may still work
                 }
             }
         }
@@ -553,15 +556,16 @@ impl AgentService {
                     iteration,
                 );
                 match self.compact_context(&mut context, &model_name).await {
-                    Ok(_summary) => {
-                        // After compaction, inject a continuation prompt so the LLM
-                        // knows to resume the task (not start fresh from the summary)
+                    Ok(summary) => {
+                        // Stream the summary to chat so user can see it
+                        if let Some(ref cb) = self.progress_callback {
+                            cb(ProgressEvent::CompactionSummary { summary });
+                        }
+                        // Inject continuation — no "acknowledge first", go straight to tools
                         let continuation = Message::user(
-                            "[SYSTEM: Context was auto-compacted. The compaction summary above \
-                             contains everything you need. First, acknowledge the compaction to \
-                             the user with a brief fun/cheeky remark about it (be creative, \
-                             surprise them — cursing allowed). Then immediately continue executing \
-                             the task from where you left off. Do NOT repeat work already done.]"
+                            "[SYSTEM: Context was auto-compacted. The summary above has full context. \
+                             Continue the task immediately using tools. Do NOT repeat completed work. \
+                             Do NOT ask for instructions.]"
                             .to_string()
                         );
                         context.add_message(continuation);
@@ -667,6 +671,10 @@ impl AgentService {
                     );
                     context.token_count = real_message_tokens;
                 }
+            }
+            // Fire real-time token count update after every API response
+            if let Some(ref cb) = self.progress_callback {
+                cb(ProgressEvent::TokenCount(context.token_count));
             }
 
             // Separate text blocks and tool use blocks from the response
@@ -1211,6 +1219,11 @@ impl AgentService {
                 content: tool_results,
             };
             context.add_message(tool_result_msg);
+
+            // Fire token count update after tool results are added — keeps TUI in sync
+            if let Some(ref cb) = self.progress_callback {
+                cb(ProgressEvent::TokenCount(context.token_count));
+            }
 
             // Budget re-check: ensure we haven't blown past the context window
             // during the tool loop. Tool results can be massive (file contents, grep, etc.)

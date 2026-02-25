@@ -967,6 +967,9 @@ impl App {
                 self.reload_user_commands();
                 tracing::info!("Config reloaded — refreshed commands and settings");
             }
+            TuiEvent::TokenCountUpdated(count) => {
+                self.display_token_count = count;
+            }
             TuiEvent::OnboardingModelsFetched(models) => {
                 if let Some(ref mut wizard) = self.onboarding {
                     wizard.models_fetching = false;

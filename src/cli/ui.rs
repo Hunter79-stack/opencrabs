@@ -263,6 +263,9 @@ pub(crate) async fn cmd_chat(
             ProgressEvent::RestartReady { status } => {
                 progress_sender.send(TuiEvent::RestartReady(status))
             }
+            ProgressEvent::TokenCount(count) => {
+                progress_sender.send(TuiEvent::TokenCountUpdated(count))
+            }
         };
         if let Err(e) = result {
             tracing::error!("Progress event channel closed: {}", e);

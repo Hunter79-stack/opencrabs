@@ -83,6 +83,9 @@ pub enum TuiEvent {
     /// Configuration was reloaded (e.g. after config_tool write)
     ConfigReloaded,
 
+    /// Real-time token count update from the agent loop
+    TokenCountUpdated(usize),
+
     /// Onboarding wizard received fetched model list from provider API
     OnboardingModelsFetched(Vec<String>),
 
