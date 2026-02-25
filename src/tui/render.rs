@@ -2464,34 +2464,7 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
 /// Used for old sessions that have token_count but zero cost stored.
 /// Pricing per million tokens (verified via OpenRouter API 2026-02-25).
 fn estimate_cost_from_tokens(model: &str, token_count: i64) -> Option<f64> {
-    let m = model.to_lowercase();
-    // Assume a typical 80/20 split: 80% input, 20% output tokens
-    let input_tokens = (token_count as f64 * 0.80) as u64;
-    let output_tokens = (token_count as f64 * 0.20) as u64;
-
-    let (input_cost, output_cost): (f64, f64) = if m.contains("claude-opus-4") {
-        (5.0, 25.0)
-    } else if m.contains("claude-opus-3") || m.contains("claude-3-opus") {
-        (15.0, 75.0)
-    } else if m.contains("claude-sonnet-4")
-        || m.contains("claude-3-7-sonnet")
-        || m.contains("claude-3-5-sonnet")
-        || m.contains("claude-3-sonnet")
-    {
-        (3.0, 15.0)
-    } else if m.contains("claude-haiku-4") {
-        (1.0, 5.0)
-    } else if m.contains("claude-3-5-haiku") {
-        (0.80, 4.0)
-    } else if m.contains("claude-3-haiku") {
-        (0.25, 1.25)
-    } else {
-        return None; // Unknown model — can't estimate
-    };
-
-    let cost = (input_tokens as f64 / 1_000_000.0) * input_cost
-        + (output_tokens as f64 / 1_000_000.0) * output_cost;
-    Some(cost)
+    crate::pricing::pricing().estimate_cost(model, token_count)
 }
 
 /// Render the usage stats dialog (centered overlay)

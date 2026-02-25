@@ -857,20 +857,7 @@ impl Provider for OpenAIProvider {
     }
 
     fn calculate_cost(&self, model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
-        // Costs per million tokens (as of 2024)
-        let (input_cost, output_cost) = match model {
-            "gpt-4-turbo-preview" => (10.0, 30.0),
-            "gpt-4" => (30.0, 60.0),
-            "gpt-4-32k" => (60.0, 120.0),
-            "gpt-3.5-turbo" => (0.5, 1.5),
-            "gpt-3.5-turbo-16k" => (3.0, 4.0),
-            _ => return 0.0,
-        };
-
-        let input_cost_total = (input_tokens as f64 / 1_000_000.0) * input_cost;
-        let output_cost_total = (output_tokens as f64 / 1_000_000.0) * output_cost;
-
-        input_cost_total + output_cost_total
+        crate::pricing::pricing().calculate_cost(model, input_tokens, output_tokens)
     }
 }
 

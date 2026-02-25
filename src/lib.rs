@@ -39,6 +39,7 @@ pub mod utils;
 
 pub mod channels;
 pub mod a2a;
+pub mod pricing;
 
 // Re-export commonly used types
 pub use error::{OpenCrabsError, ErrorCode};
