@@ -1407,6 +1407,7 @@ impl AgentService {
         use crate::brain::provider::{ContentDelta, StreamEvent, TokenUsage};
         use futures::StreamExt;
 
+        let request_model = request.model.clone();
         let mut stream = self.provider.stream(request).await?;
 
         // Accumulate state from stream events
@@ -1518,7 +1519,9 @@ impl AgentService {
 
         Ok(LLMResponse {
             id,
-            model,
+            // Some providers (e.g. MiniMax) don't include the model name in stream chunks.
+            // Fall back to the request model so pricing lookup never gets an empty string.
+            model: if model.is_empty() { request_model } else { model },
             content: content_blocks,
             stop_reason,
             usage: TokenUsage { input_tokens, output_tokens },

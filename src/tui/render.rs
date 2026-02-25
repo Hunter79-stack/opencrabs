@@ -2464,7 +2464,9 @@ fn render_model_selector(f: &mut Frame, app: &App, area: Rect) {
 /// Used for old sessions that have token_count but zero cost stored.
 /// Pricing per million tokens (verified via OpenRouter API 2026-02-25).
 fn estimate_cost_from_tokens(model: &str, token_count: i64) -> Option<f64> {
-    crate::pricing::pricing().estimate_cost(model, token_count)
+    // Use a fresh load (not the OnceLock) so UI reflects live pricing file edits
+    // and avoids stale cache issues with providers like MiniMax.
+    crate::pricing::PricingConfig::load().estimate_cost(model, token_count)
 }
 
 /// Render the usage stats dialog (centered overlay)
@@ -2484,7 +2486,18 @@ fn render_usage_dialog(f: &mut Frame, app: &App, area: Rect) {
 
     let message_count = app.messages.len();
     let cur_tokens = app.total_tokens();
-    let cur_cost = app.total_cost();
+    // If stored cost is zero but we have tokens, estimate from pricing table.
+    // This covers sessions started before pricing was fixed or mid-session on first run.
+    let (cur_cost, cur_cost_estimated) = {
+        let stored = app.total_cost();
+        if stored > 0.0 {
+            (stored, false)
+        } else if cur_tokens > 0 {
+            (estimate_cost_from_tokens(model, cur_tokens as i64).unwrap_or(0.0), true)
+        } else {
+            (0.0, false)
+        }
+    };
 
     // ── All-time stats grouped by model ───────────────────────────────────
     // Group sessions by model, sum token_count and total_cost.
@@ -2499,7 +2512,23 @@ fn render_usage_dialog(f: &mut Frame, app: &App, area: Rect) {
     let mut by_model: HashMap<String, ModelStats> = HashMap::new();
 
     for s in &app.sessions {
-        let model_key = s.model.clone().unwrap_or_else(|| "unknown".to_string());
+        // Skip empty sessions — no model set yet (new session, no messages sent)
+        if s.token_count == 0 && s.total_cost == 0.0 {
+            continue;
+        }
+        // Sessions created before model was persisted won't have a model field.
+        // Fall back to the current session's model so they don't bucket under "unknown".
+        let model_key = s
+            .model
+            .clone()
+            .filter(|m| !m.is_empty())
+            .unwrap_or_else(|| {
+                app.current_session
+                    .as_ref()
+                    .and_then(|cs| cs.model.clone())
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or_else(|| app.provider_model().to_string())
+            });
         let entry = by_model.entry(model_key.clone()).or_insert(ModelStats {
             sessions: 0,
             tokens: 0,
@@ -2571,7 +2600,14 @@ fn render_usage_dialog(f: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("  Cost:     ", label_style),
-            Span::styled(format!("${:.4}", cur_cost), value_style),
+            Span::styled(
+                if cur_cost_estimated {
+                    format!("~${:.4}", cur_cost)
+                } else {
+                    format!("${:.4}", cur_cost)
+                },
+                if cur_cost_estimated { est_style } else { value_style },
+            ),
         ]),
         Line::from(""),
         Line::from(vec![Span::styled("  ── All Sessions ──", header_style)]),

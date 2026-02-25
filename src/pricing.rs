@@ -18,11 +18,19 @@ pub struct PricingEntry {
     pub output_per_m: f64,
 }
 
+/// Per-provider block in the TOML file.
+/// TOML format: `[providers.anthropic]\nentries = [...]`
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProviderBlock {
+    #[serde(default)]
+    pub entries: Vec<PricingEntry>,
+}
+
 /// The full pricing table, keyed by provider name (for display only).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PricingConfig {
     #[serde(default)]
-    pub providers: HashMap<String, Vec<PricingEntry>>,
+    pub providers: HashMap<String, ProviderBlock>,
 }
 
 impl PricingConfig {
@@ -31,8 +39,8 @@ impl PricingConfig {
     /// Returns 0.0 if no match found.
     pub fn calculate_cost(&self, model: &str, input_tokens: u32, output_tokens: u32) -> f64 {
         let m = model.to_lowercase();
-        for entries in self.providers.values() {
-            for entry in entries {
+        for block in self.providers.values() {
+            for entry in &block.entries {
                 if m.contains(&entry.prefix.to_lowercase()) {
                     let input = (input_tokens as f64 / 1_000_000.0) * entry.input_per_m;
                     let output = (output_tokens as f64 / 1_000_000.0) * entry.output_per_m;
@@ -47,8 +55,8 @@ impl PricingConfig {
     /// Returns None if model is unknown.
     pub fn estimate_cost(&self, model: &str, token_count: i64) -> Option<f64> {
         let m = model.to_lowercase();
-        for entries in self.providers.values() {
-            for entry in entries {
+        for block in self.providers.values() {
+            for entry in &block.entries {
                 if m.contains(&entry.prefix.to_lowercase()) {
                     let input = (token_count as f64 * 0.80 / 1_000_000.0) * entry.input_per_m;
                     let output = (token_count as f64 * 0.20 / 1_000_000.0) * entry.output_per_m;
@@ -60,15 +68,96 @@ impl PricingConfig {
     }
 
     /// Load from ~/.opencrabs/usage_pricing.toml.
-    /// Returns compiled-in defaults if file is missing or unreadable.
+    /// Supports both the current schema (`[providers.X] entries = [...]`) and the
+    /// legacy on-disk schema (`[[usage.pricing.X]]` array-of-tables).
+    /// Returns compiled-in defaults if file is missing, unreadable, or both schemas fail.
     pub fn load() -> Self {
         let path = crate::config::opencrabs_home().join("usage_pricing.toml");
-        if let Ok(content) = std::fs::read_to_string(&path)
-            && let Ok(cfg) = toml::from_str::<PricingConfig>(&content)
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => return Self::defaults(),
+        };
+
+        // Try current schema first.
+        if let Ok(cfg) = toml::from_str::<PricingConfig>(&content)
+            && !cfg.providers.is_empty()
         {
             return cfg;
         }
+
+        // Try legacy schema: [[usage.pricing.<provider>]] entries
+        if let Ok(cfg) = Self::load_legacy(&content)
+            && !cfg.providers.is_empty()
+        {
+            tracing::warn!(
+                "usage_pricing.toml uses old format — please update it to the new schema. \
+                 See ~/.opencrabs/usage_pricing.toml.example"
+            );
+            let new_content = Self::serialize_to_toml(&cfg);
+            let _ = std::fs::write(&path, new_content);
+            return cfg;
+        }
+
+        tracing::warn!("usage_pricing.toml failed to parse with both schemas — using built-in defaults");
         Self::defaults()
+    }
+
+    /// Parse the legacy `[[usage.pricing.<provider>]]` format.
+    fn load_legacy(content: &str) -> Result<Self, toml::de::Error> {
+        #[derive(serde::Deserialize)]
+        struct LegacyRoot {
+            usage: Option<LegacyUsage>,
+        }
+        #[derive(serde::Deserialize)]
+        struct LegacyUsage {
+            pricing: Option<toml::Value>,
+        }
+
+        let root: LegacyRoot = toml::from_str(content)?;
+        let pricing_val = root
+            .usage
+            .and_then(|u| u.pricing)
+            .unwrap_or(toml::Value::Table(toml::map::Map::new()));
+
+        let mut providers: HashMap<String, ProviderBlock> = HashMap::new();
+        if let toml::Value::Table(table) = pricing_val {
+            for (provider_name, entries_val) in table {
+                if let toml::Value::Array(arr) = entries_val {
+                    let entries: Vec<PricingEntry> = arr
+                        .into_iter()
+                        .filter_map(|v| v.try_into().ok())
+                        .collect();
+                    if !entries.is_empty() {
+                        providers.insert(provider_name, ProviderBlock { entries });
+                    }
+                }
+            }
+        }
+
+        Ok(PricingConfig { providers })
+    }
+
+    /// Serialize a PricingConfig back to the canonical TOML schema.
+    fn serialize_to_toml(cfg: &PricingConfig) -> String {
+        let mut out = String::from(
+            "# OpenCrabs Usage Pricing — auto-migrated to current schema.\n\
+             # Edit freely. Changes take effect immediately on next /usage open.\n\
+             # prefix is matched case-insensitively as a substring of the model name.\n\
+             # Costs are per 1 million tokens (USD).\n\n",
+        );
+        let mut providers: Vec<(&String, &ProviderBlock)> = cfg.providers.iter().collect();
+        providers.sort_by_key(|(k, _)| k.as_str());
+        for (name, block) in providers {
+            out.push_str(&format!("[providers.{}]\nentries = [\n", name));
+            for e in &block.entries {
+                out.push_str(&format!(
+                    "  {{ prefix = {:?}, input_per_m = {}, output_per_m = {} }},\n",
+                    e.prefix, e.input_per_m, e.output_per_m
+                ));
+            }
+            out.push_str("]\n\n");
+        }
+        out
     }
 
     /// Write the default pricing file to ~/.opencrabs/usage_pricing.toml if it doesn't exist.
